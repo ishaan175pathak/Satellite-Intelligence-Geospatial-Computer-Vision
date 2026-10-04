@@ -103,26 +103,44 @@ Final Geospatial Visualization
 
 # 📊 Dataset
 
-## SpaceNet 2 — Building Detection v2
+## WHU Building Dataset (Hugging Face)
 
-The initial dataset is **SpaceNet 2: Building Detection v2**.
+The initial dataset is the **WHU Building Dataset** (aerial imagery subset), hosted on the Hugging Face Hub.
 
-Official dataset:
+Hugging Face mirror:
 
-**https://spacenet.ai/spacenet-buildings-dataset-v2/**
+**https://huggingface.co/datasets/giswqs/WHU-Building-Dataset**
 
-SpaceNet provides high-resolution satellite imagery together with building-footprint annotations represented as geospatial polygons.
+Original source and paper:
 
-The dataset contains imagery from multiple geographic regions, allowing the project to investigate both segmentation performance and geographic generalization.
+**https://gpcv.whu.edu.cn/data/building_dataset.html**
+
+> Ji, S., Wei, S., & Lu, M. *Fully Convolutional Networks for Multisource Building Extraction from an Open Aerial and Satellite Imagery Data Set.* IEEE TGRS.
+
+**License:** CC-BY-4.0 (as listed on the Hugging Face dataset page).
+
+The dataset provides high-resolution aerial imagery with pixel-level building masks, organized into `Image/` and `Mask/` folders per split. It is fully open, requires no account or special tooling, and downloads with a single command via `huggingface_hub`.
+
+### Why this dataset
+
+* Open license and one-command download (no archives to extract).
+* Image/mask pairs ready for segmentation, so the focus stays on modeling.
+* Building footprints cover a dense, real urban area with varied building sizes and shapes.
+* Large enough to train a U-Net and a SegFormer baseline on a single GPU.
+
+### Known Limitations
+
+* The aerial subset covers a **single region (Christchurch, New Zealand)**, so cross-city generalization cannot be measured directly from this dataset alone (see *Spatial Generalization* below).
+* Annotations are provided as **raster masks**, not vector GeoJSON. Polygons are derived from predicted masks in Phase 4 and are expressed in pixel coordinates unless the tiles carry georeferencing (checked by `src/data/download_dataset.py`).
 
 ### Dataset Structure
 
 Conceptually:
 
 ```text
-Satellite Image
+Aerial Image Tile
       +
-Building Footprint GeoJSON
+Binary Building Mask
       │
       ▼
 Preprocessing
@@ -130,6 +148,16 @@ Preprocessing
       ▼
 Image Tile + Segmentation Mask
 ```
+
+### Download
+
+```bash
+pip install huggingface_hub
+py src/data/download_dataset.py          # train split
+py src/data/download_dataset.py all      # full dataset
+```
+
+Data is stored under `data/raw/whu_building/`.
 
 ### Dataset Visualization
 
@@ -146,15 +174,15 @@ Add a screenshot showing:
 
 ---
 
-# 🧭 Future Dataset — SpaceNet 7
+# 🧭 Future Dataset — LEVIR-CD+
 
-After establishing the initial segmentation pipeline, the project may be extended using **SpaceNet 7** for multi-temporal urban development analysis.
+After establishing the initial segmentation pipeline, the project may be extended using **LEVIR-CD+**, a building change-detection dataset available on the Hugging Face Hub, for multi-temporal analysis.
 
-Official dataset:
+Hugging Face mirror:
 
-**https://www.spacenet.ai/sn7-challenge/**
+**https://huggingface.co/datasets/blanchon/LEVIR_CDPlus**
 
-The objective is to investigate how satellite imagery captured at different points in time can be used to identify changes in building footprints.
+The objective is to investigate how bi-temporal imagery can be used to identify newly constructed or removed buildings. Dataset details (pair structure, mask format, license) will be confirmed from the dataset card before Phase 5 begins.
 
 ```text
 Image T1 ───────────────┐
@@ -379,22 +407,19 @@ Ground Truth | CNN Prediction | Transformer Prediction
 A major focus of the project is making the dataset pipeline reproducible and reliable.
 
 ```text
-Raw SpaceNet Data
+Raw WHU Building Data
        │
        ▼
-Annotation Parsing
+Mask Parsing & Binarization
        │
        ▼
-Polygon Validation
+Mask Validation
        │
        ▼
-Image / Annotation Alignment
+Image / Mask Alignment
        │
        ▼
-Image Tiling
-       │
-       ▼
-Polygon → Raster Mask
+Image Tiling / Cropping
        │
        ▼
 Train / Validation / Test Split
@@ -409,13 +434,13 @@ PyTorch Dataset
 
 Show the transformation:
 
-Original Satellite Image
+Original Aerial Image
         ↓
-512×512 Tile
+512×512 Tile (or smaller crops)
         ↓
-GeoJSON Polygon
+Binary Building Mask
         ↓
-Rasterized Mask
+Image / Mask Overlay
 -->
 
 ---
@@ -424,14 +449,14 @@ Rasterized Mask
 
 The README will include small code snippets that demonstrate important engineering decisions rather than reproducing entire source files.
 
-## Example — Polygon Rasterization
+## Example — Mask Loading
 
 <!-- CODE PLACEHOLDER -->
 
 ```python
-mask = rasterize_building_polygons(
-    polygons,
-    image_shape=image.shape[:2]
+mask = load_binary_mask(
+    mask_path,
+    threshold=127
 )
 ```
 
@@ -541,24 +566,25 @@ Input | Ground Truth | Prediction | Error
 
 ---
 
-# 🌍 Geographic Generalization
+# 🌍 Spatial Generalization
 
-One of the important questions in satellite-image ML is whether a model trained on one geographic region generalizes to another.
+One of the important questions in satellite-image ML is whether a model trained on one area generalizes to another.
 
-The project will investigate:
+The WHU aerial subset covers a single region, so the project will investigate generalization in two ways:
 
 ```text
-Training Geography
+Spatially disjoint split (same city, non-overlapping areas)
         │
         ▼
        Model
         │
-        ├──────────► Same-region evaluation
+        ├──────────► Held-out area evaluation
         │
-        └──────────► Cross-region evaluation
+        └──────────► Optional cross-dataset evaluation
+                     (e.g. INRIA Aerial Image Labeling on Hugging Face)
 ```
 
-This helps distinguish memorization of geographic characteristics from genuine visual generalization.
+This helps distinguish memorization of local appearance from genuine visual generalization. Cross-dataset evaluation is optional and will only be reported if actually performed.
 
 ---
 
@@ -665,6 +691,7 @@ satellite-intelligence/
 │
 ├── src/
 │   ├── data/
+│   │   ├── download_dataset.py
 │   │   ├── dataset.py
 │   │   ├── preprocessing.py
 │   │   └── tiling.py
@@ -779,7 +806,7 @@ Example:
 
 ```yaml
 dataset:
-  name: spacenet2
+  name: whu_building
   tile_size: 512
 
 training:
@@ -815,7 +842,7 @@ How does a transformer-based segmentation architecture compare with a CNN-based 
 
 ### RQ3
 
-How does geographic variation affect model generalization?
+How well do models generalize to spatially held-out areas, and optionally to a different dataset?
 
 ### RQ4
 
@@ -860,6 +887,7 @@ What is the trade-off between segmentation accuracy and inference efficiency?
 
 * NumPy
 * Pandas
+* Hugging Face Hub (`huggingface_hub`)
 * Matplotlib
 * Jupyter
 
@@ -885,26 +913,26 @@ What is the trade-off between segmentation accuracy and inference efficiency?
 
 ## Phase 0 — Project Setup
 
-* [ ] Define project specification
-* [ ] Create repository structure
-* [ ] Configure Python environment
-* [ ] Configure logging
-* [ ] Add configuration system
-* [ ] Document dataset acquisition
+- [x] Define project specification
+- [x] Create repository structure
+- [x] Configure Python environment
+- [x] Configure logging
+- [x] Add configuration system
+- [x] Document dataset acquisition
 
 ---
 
 ## Phase 1 — Dataset Engineering
 
-* [ ] Download SpaceNet 2 subset
-* [ ] Inspect imagery
-* [ ] Inspect GeoJSON annotations
-* [ ] Validate image/annotation alignment
-* [ ] Convert polygons to masks
-* [ ] Implement image tiling
-* [ ] Create train/validation/test splits
-* [ ] Build PyTorch Dataset
-* [ ] Visualize annotations
+* [x] Download WHU Building Dataset from Hugging Face
+* [x] Inspect imagery
+* [x] Inspect building masks
+* [] Validate image/annotation alignment
+* [] Binarize and validate masks
+* [] Implement image tiling
+* [] Create train/validation/test splits
+* [] Build PyTorch Dataset
+* [] Visualize annotations
 
 **Documentation milestone:**
 
@@ -969,7 +997,7 @@ What is the trade-off between segmentation accuracy and inference efficiency?
 
 ## Phase 5 — Multi-Temporal Change Detection
 
-* [ ] Investigate SpaceNet 7
+* [ ] Investigate LEVIR-CD+ (Hugging Face)
 * [ ] Understand temporal annotations
 * [ ] Build temporal preprocessing pipeline
 * [ ] Establish change-detection baseline
@@ -1086,21 +1114,17 @@ Potential future directions include:
 
 # 📚 References & Dataset Sources
 
-### SpaceNet
+### WHU Building Dataset (Hugging Face)
 
-https://www.spacenet.ai/
+https://huggingface.co/datasets/giswqs/WHU-Building-Dataset
 
-### SpaceNet 2 — Building Detection v2
+### WHU Building Dataset (original source)
 
-https://spacenet.ai/spacenet-buildings-dataset-v2/
+https://gpcv.whu.edu.cn/data/building_dataset.html
 
-### SpaceNet 7 — Multi-Temporal Urban Development
+### LEVIR-CD+ (Hugging Face)
 
-https://www.spacenet.ai/sn7-challenge/
-
-### SpaceNet Dataset Catalog
-
-https://www.spacenet.ai/datasets/
+https://huggingface.co/datasets/blanchon/LEVIR_CDPlus
 
 ---
 
@@ -1110,7 +1134,7 @@ https://www.spacenet.ai/datasets/
 
 Current development will begin with:
 
-> **SpaceNet 2 → Dataset Engineering → Building Segmentation Baseline**
+> **WHU Building Dataset → Dataset Engineering → Building Segmentation Baseline**
 
 Results and visualizations will be added progressively as each experiment is completed.
 
