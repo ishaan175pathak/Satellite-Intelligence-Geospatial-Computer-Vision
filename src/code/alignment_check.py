@@ -21,8 +21,8 @@ def check_alignment_and_format(split):
         return
 
     # Get list of image files
-    image_files = [f for f in os.listdir(IMAGE_DIR) if f.endswith(".png")]
-    mask_files = [f for f in os.listdir(MASK_DIR) if f.endswith(".png")]
+    image_files: List[str] = [f for f in os.listdir(IMAGE_DIR) if f.endswith(".png")]
+    mask_files: List[str] = [f for f in os.listdir(MASK_DIR) if f.endswith(".png")]
 
     # Check that the number of images and masks match
     if len(image_files) != len(mask_files):
@@ -39,13 +39,12 @@ def check_alignment_and_format(split):
 
     # Check that the mask is a binary mask (black and white)
     for image_file, mask_file in tqdm(zip(image_files, mask_files), desc=f"Checking {split} masks", total=len(image_files)):
-        image_path = os.path.join(IMAGE_DIR, image_file)
-        mask_path = os.path.join(MASK_DIR, mask_file)
+        image_path: str = os.path.join(IMAGE_DIR, image_file)
+        mask_path: str = os.path.join(MASK_DIR, mask_file)
     
         # Load the mask
-        mask = Image.open(mask_path).convert("L")  # Convert to grayscale
-        mask_array = np.array(mask)
-    
+
+        mask_array: np.ndarray = np.array(Image.open(mask_path).convert("L"))  # Convert to grayscale
         mask_unique_values: np.ndarray = np.unique(mask_array)
         
         # Check if all unique values are within the allowed set {0, 255}
