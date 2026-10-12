@@ -132,6 +132,8 @@ The dataset provides high-resolution aerial imagery with pixel-level building ma
 
 * The aerial subset covers a **single region (Christchurch, New Zealand)**, so cross-city generalization cannot be measured directly from this dataset alone (see *Spatial Generalization* below).
 * Annotations are provided as **raster masks**, not vector GeoJSON. Polygons are derived from predicted masks in Phase 4 and are expressed in pixel coordinates unless the tiles carry georeferencing (checked by `src/data/download_dataset.py`).
+* Only the `train` folder of the Hugging Face mirror was available, so it was split randomly 80/10/10 (seed 42) into train / validation / test (4586 / 573 / 573 tiles) during preprocessing. Because the split is random across tiles from one city, neighboring tiles can land in different splits, so the reported numbers are likely optimistic compared with a spatially disjoint split (see *Spatial Generalization* below).
+* About 17% of tiles contain no buildings, and buildings make up roughly 15% of all pixels, so the classes are imbalanced and pixel accuracy alone is misleading.
 
 ### Dataset Structure
 
@@ -171,6 +173,7 @@ Add a screenshot showing:
 └───────────────┴───────────────────┴──────────────────┘
 
 -->
+![Satellite Visualization, masks and preprocessed masks](mask_check.png)
 
 ---
 
@@ -385,10 +388,10 @@ The project will compare the baseline and transformer architectures under consis
 
 | Model       | IoU | Dice | Precision | Recall | F1 | Inference |
 | ----------- | --: | ---: | --------: | -----: | -: | --------: |
-| CNN / U-Net |   — |    — |         — |      — |  — |         — |
+| CNN / U-Net (validation) | 0.8896    | 0.9416 |  — |         — |
 | Transformer |   — |    — |         — |      — |  — |         — |
 
-> Metrics will only be added after the corresponding experiments have been completed.
+> CNN / U-Net values are validation-set metrics at the saved checkpoint (epoch 33). Precision, recall, F1, and test-set results will be added after the test evaluation. Metrics will only be added after the corresponding experiments have been completed.
 
 ### Qualitative Comparison
 
@@ -490,16 +493,21 @@ polygons = extract_building_polygons(
 
 ## Training Curves
 
-<!-- IMAGE PLACEHOLDER
+![Training curves: loss, pixel accuracy, and validation Dice/IoU over 50 epochs](results/visualizations/learning_curves.png)
 
-Add:
+A U-Net with an ImageNet-pretrained ResNet18 encoder was trained for 50 epochs with a BCE + Dice loss. The dashed line marks epoch 33, the checkpoint with the lowest validation loss and the one saved as the baseline model.
 
-Training Loss
-Validation Loss
-Validation IoU
-Validation Dice
+| Saved checkpoint (epoch 33) |  Value |
+| --------------------------- | -----: |
+| Validation loss             | 0.0688 |
+| Validation pixel accuracy   | 0.9830 |
+| Validation Dice             | 0.9416 |
+| Validation IoU              | 0.8896 |
 
--->
+* Training loss keeps falling while validation loss plateaus around 0.07. The gap is modest (0.048 vs 0.071 at epoch 50) and validation loss does not trend upward, so there is no strong overfitting.
+* Validation metrics are noisy from epoch to epoch (for example the dip at epoch 44).
+* The best validation Dice (0.9428, epoch 48) is within 0.0012 of the saved checkpoint.
+* Pixel accuracy is dominated by background. Buildings are only about 15% of pixels, so predicting "no building" everywhere would already score roughly 84–85% accuracy. Dice and IoU are the metrics to read.
 
 ---
 
@@ -556,13 +564,18 @@ Potential categories include:
 
 ### Failure Case Visualization
 
-<!-- IMAGE PLACEHOLDER
+![Test-set predictions: input, ground truth, prediction, and error overlay for best, median, worst, and empty tiles](results/visualizations/whu_test_predictions.png)
 
-Add a grid such as:
+Tiles come from the test split and were chosen by per-tile IoU (2 best, 2 median, 2 worst among tiles containing buildings, plus 1 empty tile), so the figure shows the range of behavior rather than a random sample. Columns: input, ground truth, prediction, and an error overlay (green = correct building, red = false alarm, blue = missed building).
 
-Input | Ground Truth | Prediction | Error
+What the examples show:
 
--->
+* Large, simple roofs such as industrial buildings are segmented almost perfectly (IoU 0.97–0.98).
+* Dense residential tiles sit around IoU 0.89, with errors on small outbuildings and along building edges.
+* The two worst tiles contain only a handful of building pixels, and the model missed them (IoU 0.00). Very small buildings are the clearest failure mode.
+* On a tile with no buildings, the model produced a small false alarm (about 1,200 pixels) near the tile edge.
+
+These are qualitative observations from seven tiles. A quantitative breakdown by building size and tile type is still to be done.
 
 ---
 
@@ -662,20 +675,15 @@ satellite-intelligence/
 │
 ├── data/
 │   ├── raw/
-│   ├── processed/
-│   └── splits/
+│   └──processed/
+│      ├── test/
+│      ├── train/
+│      └── tests/
 │
-├── docs/
-│   ├── images/
-│   │   ├── dataset_visualization.png
-│   │   ├── preprocessing.png
-│   │   ├── segmentation_example.png
-│   │   ├── segmentation_results.png
-│   │   ├── model_comparison.png
-│   │   ├── polygon_extraction.png
-│   │   ├── change_detection.png
-│   │   ├── training_curves.png
-│   │   └── error_analysis.png
+├── results/
+│   ├── visualization/
+│   │   ├── learning_curves.png
+│   │   └── whu_test_prediction.png
 │   │
 │   ├── diagrams/
 │   │   └── system_architecture.png
@@ -684,23 +692,23 @@ satellite-intelligence/
 │       ├── end_to_end_demo.gif
 │       └── api_demo.gif
 │
-├── notebooks/
-│   ├── 01_dataset_exploration.ipynb
-│   ├── 02_visualize_annotations.ipynb
-│   └── 03_results_analysis.ipynb
-│
 ├── src/
-│   ├── data/
-│   │   ├── download_dataset.py
+│   ├── code/
+│   │   ├── __init__.py
+│   │   ├── alignment_check.py
+│   │   ├── check_masks.py
+│   │   ├── dataset_visualization.py
 │   │   ├── dataset.py
+│   │   ├── loss.py
+│   │   ├── metrics.py
+│   │   ├── model.py
 │   │   ├── preprocessing.py
-│   │   └── tiling.py
+│   │   └── trainer.py
 │   │
-│   ├── models/
-│   │   ├── unet.py
-│   │   └── segformer.py
+│   ├── data/
+│   │   └── download_dataset.py
 │   │
-│   ├── training/
+│   ├── visualization/
 │   │   ├── trainer.py
 │   │   └── losses.py
 │   │
@@ -722,6 +730,9 @@ satellite-intelligence/
 ├── tests/
 │
 ├── train.py
+├── masks_check.png
+├── unet_best_model.pth
+├── unet_training_logs.csv
 ├── requirements.txt
 ├── Dockerfile
 └── README.md
@@ -754,16 +765,10 @@ Geospatial Response
 
 ### API Demo
 
-<!-- GIF PLACEHOLDER
+The following animation illustrates the end-to-end workflow, from
+image upload and model inference to building-mask visualization.
 
-Add a GIF showing:
-
-1. Image upload
-2. API request
-3. Model inference
-4. Visualization of output
-
--->
+![WHU Building Segmentation Pipeline](whu_building_segmentation_pipeline_demo.gif)
 
 ---
 
@@ -800,33 +805,41 @@ Performance will be measured rather than assumed.
 
 # 🧪 Reproducibility
 
-Experiments will use configuration-driven training rather than hard-coded parameters.
-
-Example:
+The baseline was trained with the settings below. They are currently set directly in the training script; moving them into a YAML config is planned.
 
 ```yaml
 dataset:
   name: whu_building
-  tile_size: 512
+  tile_size: 512            # images and masks resized to 512x512
+  split: random 80/10/10, seed 42   # 4586 / 573 / 573 tiles
 
 training:
-  batch_size: 8
+  batch_size: 4
+  gradient_accumulation_steps: 2    # effective batch size 8
   epochs: 50
+  optimizer: AdamW
   learning_rate: 0.0001
+  weight_decay: 0.0001
+  loss: BCE + Dice (0.5 / 0.5)
+  mixed_precision: true             # on CUDA
 
 model:
   architecture: unet
+  encoder: resnet18                 # ImageNet-pretrained
+  library: segmentation_models_pytorch
 
 evaluation:
-  metrics:
+  checkpoint_selection: lowest validation loss
+  threshold: 0.5
+  metrics_so_far:
     - iou
     - dice
+    - pixel_accuracy
+  planned_on_test:
     - precision
     - recall
     - f1
 ```
-
-Actual values will be finalized after dataset exploration and hardware benchmarking.
 
 ---
 
@@ -868,6 +881,7 @@ What is the trade-off between segmentation accuracy and inference efficiency?
 
 * PyTorch
 * torchvision
+* segmentation_models_pytorch
 * Hugging Face Transformers
 
 ### Computer Vision
@@ -927,37 +941,37 @@ What is the trade-off between segmentation accuracy and inference efficiency?
 * [x] Download WHU Building Dataset from Hugging Face
 * [x] Inspect imagery
 * [x] Inspect building masks
-* [] Validate image/annotation alignment
-* [] Binarize and validate masks
-* [] Implement image tiling
-* [] Create train/validation/test splits
-* [] Build PyTorch Dataset
-* [] Visualize annotations
+* [x] Validate image/annotation alignment
+* [x] Binarize and validate masks
+* [x] Resize images and masks to 512×512
+* [x] Create train/validation/test splits
+* [x] Build PyTorch Dataset
+* [x] Visualize annotations
 
 **Documentation milestone:**
 
-* [ ] Dataset visualization screenshot
-* [ ] Preprocessing visualization
-* [ ] Dataset pipeline diagram
+* [x] Dataset visualization screenshot
+* [x] Preprocessing visualization
+* [x] Dataset pipeline diagram
 
 ---
 
 ## Phase 2 — CNN Baseline
 
-* [ ] Implement segmentation model
-* [ ] Implement training pipeline
-* [ ] Implement loss functions
-* [ ] Train baseline
-* [ ] Evaluate metrics
-* [ ] Generate prediction visualizations
-* [ ] Perform error analysis
+* [x] Implement segmentation model
+* [x] Implement training pipeline
+* [x] Implement loss functions
+* [x] Train baseline
+* [x] Evaluate metrics
+* [x] Generate prediction visualizations
+* [x] Perform error analysis
 
 **Documentation milestone:**
 
-* [ ] Training curves
-* [ ] Prediction examples
-* [ ] Failure cases
-* [ ] Baseline metrics
+* [x] Training curves
+* [x] Prediction examples
+* [x] Failure cases
+* [x] Baseline metrics
 
 ---
 
@@ -1056,14 +1070,16 @@ This prevents the README from becoming a collection of unsupported claims and en
 
 # 📊 Final Results
 
-This section will be populated after the experiments are completed.
+The CNN baseline results are below. The remaining rows will be populated after the corresponding experiments are completed.
 
 ## Model Performance
 
-| Model        | IoU | Dice | Precision | Recall | F1 |
-| ------------ | --: | ---: | --------: | -----: | -: |
-| CNN Baseline |   — |    — |         — |      — |  — |
-| Transformer  |   — |    — |         — |      — |  — |
+| Model                   |    IoU |   Dice | Precision | Recall | F1 |
+| ----------------------- | -----: | -----: | --------: | -----: | -: |
+| CNN Baseline (validation) | 0.8896 | 0.9416 |         — |      — |  — |
+| Transformer             |      — |      — |         — |      — |  — |
+
+> CNN baseline values are validation-set metrics at the saved checkpoint (epoch 33). Test-set evaluation, including precision, recall, and F1, is still to be added.
 
 ## Deployment Performance
 
@@ -1132,9 +1148,11 @@ https://huggingface.co/datasets/blanchon/LEVIR_CDPlus
 
 🚧 **In Development**
 
-Current development will begin with:
+**Completed:** Phase 0 (setup), Phase 1 (dataset engineering), and Phase 2 (U-Net baseline: validation Dice 0.9416, IoU 0.8896).
 
-> **WHU Building Dataset → Dataset Engineering → Building Segmentation Baseline**
+**Next:** Phase 3, a SegFormer model evaluated under the same protocol, plus a held-out test-set evaluation of the baseline (precision, recall, F1).
+
+> **WHU Building Dataset → Dataset Engineering → Building Segmentation Baseline → Transformer Comparison**
 
 Results and visualizations will be added progressively as each experiment is completed.
 
