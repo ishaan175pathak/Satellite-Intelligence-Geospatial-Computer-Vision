@@ -301,13 +301,13 @@ Before → After → Detected Change
 
 The project follows an incremental modeling strategy.
 
-Rather than immediately adopting a complex architecture, a strong baseline will first be established.
+Rather than immediately adopting a complex architecture, a strong CNN baseline was established first and then compared against a transformer under the same training protocol.
 
 ---
 
 ## 1️⃣ CNN Baseline
 
-The initial model will use a conventional segmentation architecture such as U-Net.
+The baseline is a U-Net with an ImageNet-pretrained ResNet18 encoder, built with `segmentation_models_pytorch`.
 
 ```text
 Input Image
@@ -327,30 +327,20 @@ Building Mask
 
 ### Model Code Snapshot
 
-<!-- CODE PLACEHOLDER
-
-Replace this section later with a small, representative implementation snippet.
-
-Example:
-
 ```python
-model = UNet(
-    encoder="...",
-    num_classes=1
+self.model = smp.Unet(
+    encoder_name="resnet18",
+    encoder_weights="imagenet",
+    in_channels=3,
+    classes=1,
 )
-```
-
--->
-
-```python
-# Model implementation will be added here.
 ```
 
 ---
 
 ## 2️⃣ Transformer-Based Segmentation
 
-A modern transformer-based segmentation architecture such as **SegFormer** will subsequently be evaluated.
+**SegFormer-B0** (`nvidia/mit-b0`) was trained under the same protocol. Its Mix Transformer encoder is ImageNet-pretrained and the decode head is newly initialized. SegFormer outputs logits at 1/4 of the input resolution, so they are upsampled to 512×512 and the same loss, trainer, and metrics apply unchanged.
 
 ```text
 Satellite Image
@@ -370,14 +360,17 @@ Building Mask
 
 ### Transformer Code Snapshot
 
-<!-- CODE PLACEHOLDER
-
-Add a concise snippet showing model initialization or inference.
-
--->
-
 ```python
-# Transformer implementation will be added here.
+self.model = SegformerForSemanticSegmentation.from_pretrained(
+    "nvidia/mit-b0", num_labels=1
+)
+
+def forward(self, x):
+    logits = self.model(pixel_values=x).logits   # 1/4 resolution
+    return F.interpolate(
+        logits, size=x.shape[-2:],
+        mode="bilinear", align_corners=False,
+    )
 ```
 
 ---
@@ -386,14 +379,23 @@ Add a concise snippet showing model initialization or inference.
 
 The project will compare the baseline and transformer architectures under consistent experimental conditions.
 
-| Model       | IoU | Dice | Precision | Recall | F1 | Inference |
-| ----------- | --: | ---: | --------: | -----: | -: | --------: |
-| CNN / U-Net (validation) | 0.8896    | 0.9416 |  — |         — |
-| Transformer |   — |    — |         — |      — |  — |         — |
+| Model                                   |    IoU |   Dice | Precision | Recall | F1 | Inference |
+| --------------------------------------- | -----: | -----: | --------: | -----: | -: | --------: |
+| CNN / U-Net, ResNet18 (validation)      | 0.8896 | 0.9416 |         — |      — |  — |         — |
+| Transformer / SegFormer-B0 (validation) | 0.8775 | 0.9348 |         — |      — |  — |         — |
 
-> CNN / U-Net values are validation-set metrics at the saved checkpoint (epoch 33). Precision, recall, F1, and test-set results will be added after the test evaluation. Metrics will only be added after the corresponding experiments have been completed.
+> Validation-set metrics at each model's saved checkpoint (U-Net: epoch 33, SegFormer-B0: epoch 41). Both models use the same splits, loss, optimizer, learning rate, batch size, and number of epochs. Precision, recall, F1, inference time, and test-set results will be added after the test evaluation. Metrics will only be added after the corresponding experiments have been completed.
+
+### Comparison
+
+* **The U-Net is ahead on validation:** Dice 0.9416 vs 0.9348 (+0.0068), IoU 0.8896 vs 0.8775 (+0.0121), and a lower validation loss (0.0688 vs 0.0801).
+* **The gap is larger than typical epoch-to-epoch noise.** Over the last ten epochs the U-Net's validation Dice is mostly 0.939–0.943, while SegFormer-B0's is 0.925–0.933 from epoch 44 onward (after its epoch-42 spike).
+* **Caveats:** one training run per model with no repeated seeds. SegFormer-B0 is the smallest SegFormer variant and was trained with the U-Net's learning rate without tuning. Checkpoints were selected by validation loss, so the validation numbers are slightly optimistic for both models. Test-set metrics are still to be added.
+* The result therefore reads as "SegFormer-B0 did not beat the U-Net baseline under identical settings", not as a general statement about transformers.
 
 ### Qualitative Comparison
+
+Per-model test-set figures are in *Error Analysis* below. Each figure selects its tiles by that model's own IoU, so a same-tile side-by-side comparison is still to be added.
 
 <!-- IMAGE PLACEHOLDER
 
@@ -493,7 +495,9 @@ polygons = extract_building_polygons(
 
 ## Training Curves
 
-![Training curves: loss, pixel accuracy, and validation Dice/IoU over 50 epochs](results/visualizations/learning_curves.png)
+### U-Net (ResNet18 encoder)
+
+![U-Net training curves: loss, pixel accuracy, and validation Dice/IoU over 50 epochs](results/visualizations/learning_curves.png)
 
 A U-Net with an ImageNet-pretrained ResNet18 encoder was trained for 50 epochs with a BCE + Dice loss. The dashed line marks epoch 33, the checkpoint with the lowest validation loss and the one saved as the baseline model.
 
@@ -508,6 +512,23 @@ A U-Net with an ImageNet-pretrained ResNet18 encoder was trained for 50 epochs w
 * Validation metrics are noisy from epoch to epoch (for example the dip at epoch 44).
 * The best validation Dice (0.9428, epoch 48) is within 0.0012 of the saved checkpoint.
 * Pixel accuracy is dominated by background. Buildings are only about 15% of pixels, so predicting "no building" everywhere would already score roughly 84–85% accuracy. Dice and IoU are the metrics to read.
+
+### SegFormer-B0
+
+![SegFormer-B0 training curves: loss, pixel accuracy, and validation Dice/IoU over 50 epochs](results/visualizations/learning_curves_transformer.png)
+
+SegFormer-B0 (`nvidia/mit-b0`) was trained for 50 epochs with the same loss, optimizer, learning rate, and batch size. The dashed line marks epoch 41, the checkpoint with the lowest validation loss.
+
+| Saved checkpoint (epoch 41) |  Value |
+| --------------------------- | -----: |
+| Validation loss             | 0.0801 |
+| Validation pixel accuracy   | 0.9811 |
+| Validation Dice             | 0.9348 |
+| Validation IoU              | 0.8775 |
+
+* Training loss falls steadily, while validation loss is noisier. The gap at epoch 50 is modest (0.065 vs 0.081) and validation loss does not trend upward.
+* There is a one-epoch validation spike at epoch 42: validation loss jumps from 0.0801 to 0.1871 and Dice drops from 0.9348 to 0.8418, while training loss stays in its normal range (0.0728). Validation recovers by epoch 44. The saved checkpoint (epoch 41) comes just before the spike.
+* After the spike, validation Dice does not return to its epoch-41 peak and settles around 0.925–0.933.
 
 ---
 
@@ -564,18 +585,25 @@ Potential categories include:
 
 ### Failure Case Visualization
 
-![Test-set predictions: input, ground truth, prediction, and error overlay for best, median, worst, and empty tiles](results/visualizations/whu_test_predictions.png)
+#### U-Net (ResNet18 encoder)
 
-Tiles come from the test split and were chosen by per-tile IoU (2 best, 2 median, 2 worst among tiles containing buildings, plus 1 empty tile), so the figure shows the range of behavior rather than a random sample. Columns: input, ground truth, prediction, and an error overlay (green = correct building, red = false alarm, blue = missed building).
+![Test-set predictions for the U-Net: input, ground truth, prediction, and error overlay for best, median, worst, and empty tiles](results/visualizations/whu_test_predictions.png)
+
+#### SegFormer-B0
+
+![Test-set predictions for SegFormer-B0: input, ground truth, prediction, and error overlay for best, median, worst, and empty tiles](results/visualizations/whu_test_predictions_transformer.png)
+
+Tiles come from the test split and were chosen by per-tile IoU for each model (2 best, 2 median, 2 worst among tiles containing buildings, plus 1 empty tile), so each figure shows the range of behavior rather than a random sample. Because each figure selects tiles by its own model's IoU, most tiles differ between the two, and the median-tile IoUs (U-Net 0.887, SegFormer-B0 0.872) are not directly comparable. Columns: input, ground truth, prediction, and an error overlay (green = correct building, red = false alarm, blue = missed building).
 
 What the examples show:
 
-* Large, simple roofs such as industrial buildings are segmented almost perfectly (IoU 0.97–0.98).
-* Dense residential tiles sit around IoU 0.89, with errors on small outbuildings and along building edges.
-* The two worst tiles contain only a handful of building pixels, and the model missed them (IoU 0.00). Very small buildings are the clearest failure mode.
-* On a tile with no buildings, the model produced a small false alarm (about 1,200 pixels) near the tile edge.
+* Both models segment large, simple roofs such as industrial buildings almost perfectly (best tiles: IoU 0.984 and 0.974 for the U-Net, 0.985 and 0.975 for SegFormer-B0).
+* Dense residential tiles sit around IoU 0.87–0.89, with errors on small outbuildings and along building edges. SegFormer-B0's predicted outlines appear softer and rounder, which fits its 1/4-resolution output.
+* Both models miss the tiny buildings in their worst tiles (a handful of building pixels, IoU 0.00), and both miss the same tile (`train_0896`). Very small buildings are the clearest failure mode for both.
+* On the one empty tile shown for both models (`train_1906`), each produces a small false alarm near the tile edge: 1,177 pixels for the U-Net and 574 for SegFormer-B0.
+* On the shared tile `train_2461`, the two models score almost identically (IoU 0.984 vs 0.985).
 
-These are qualitative observations from seven tiles. A quantitative breakdown by building size and tile type is still to be done.
+These are qualitative observations from seven tiles per model, only three of which are shared. A quantitative breakdown by building size and tile type is still to be done.
 
 ---
 
@@ -675,15 +703,17 @@ satellite-intelligence/
 │
 ├── data/
 │   ├── raw/
-│   └──processed/
-│      ├── test/
-│      ├── train/
-│      └── tests/
+│   └── processed/
+│       ├── train/
+│       ├── val/
+│       └── test/
 │
 ├── results/
-│   ├── visualization/
+│   ├── visualizations/
 │   │   ├── learning_curves.png
-│   │   └── whu_test_prediction.png
+│   │   ├── learning_curves_transformer.png
+│   │   ├── whu_test_predictions.png
+│   │   └── whu_test_predictions_transformer.png
 │   │
 │   ├── diagrams/
 │   │   └── system_architecture.png
@@ -702,37 +732,30 @@ satellite-intelligence/
 │   │   ├── loss.py
 │   │   ├── metrics.py
 │   │   ├── model.py
-│   │   ├── preprocessing.py
-│   │   └── trainer.py
+│   │   ├── trainer.py
+│   │   └── preprocessing.py
 │   │
 │   ├── data/
 │   │   └── download_dataset.py
 │   │
-│   ├── visualization/
-│   │   ├── trainer.py
-│   │   └── losses.py
-│   │
-│   ├── evaluation/
-│   │   └── metrics.py
+│   ├── visualization & Evaluation/
+│   │   ├── visualize_unet.py
+│   │   └── visualize-segmentation_transformer.py
 │   │
 │   ├── inference/
 │   │   └── predictor.py
 │   │
-│   ├── geospatial/
-│   │   └── polygon_extraction.py
-│   │
-│   └── utils/
-│       └── logger.py
-│
 ├── api/
 │   └── app.py
 │
 ├── tests/
 │
 ├── train.py
-├── masks_check.png
+├── mask_check.png
 ├── unet_best_model.pth
-├── unet_training_logs.csv
+├── unet_training_log.csv
+├── segformer_mit-b0_best_model.pth
+├── segformer_mit-b0_training_log.csv
 ├── requirements.txt
 ├── Dockerfile
 └── README.md
@@ -768,7 +791,7 @@ Geospatial Response
 The following animation illustrates the end-to-end workflow, from
 image upload and model inference to building-mask visualization.
 
-![WHU Building Segmentation Pipeline](whu_building_segmentation_pipeline_demo.gif)
+![WHU Building Segmentation Pipeline](results/demos/whu_building_segmentation_pipeline_demo.gif)
 
 ---
 
@@ -805,7 +828,7 @@ Performance will be measured rather than assumed.
 
 # 🧪 Reproducibility
 
-The baseline was trained with the settings below. They are currently set directly in the training script; moving them into a YAML config is planned.
+Both models were trained with the settings below (only the `model` block differs). Training settings are currently set in the training script; moving them into a YAML config is planned.
 
 ```yaml
 dataset:
@@ -823,10 +846,13 @@ training:
   loss: BCE + Dice (0.5 / 0.5)
   mixed_precision: true             # on CUDA
 
-model:
-  architecture: unet
-  encoder: resnet18                 # ImageNet-pretrained
-  library: segmentation_models_pytorch
+model:                              # two separate runs
+  - architecture: unet
+    encoder: resnet18               # ImageNet-pretrained
+    library: segmentation_models_pytorch
+  - architecture: segformer
+    pretrained: nvidia/mit-b0       # ImageNet-pretrained encoder, new decode head
+    library: transformers
 
 evaluation:
   checkpoint_selection: lowest validation loss
@@ -977,18 +1003,18 @@ What is the trade-off between segmentation accuracy and inference efficiency?
 
 ## Phase 3 — Transformer Segmentation
 
-* [ ] Implement/adapt SegFormer
-* [ ] Establish consistent evaluation protocol
-* [ ] Train transformer model
-* [ ] Compare against CNN baseline
-* [ ] Analyze performance differences
+* [x] Implement/adapt SegFormer
+* [x] Establish consistent evaluation protocol
+* [x] Train transformer model
+* [x] Compare against CNN baseline
+* [x] Analyze performance differences
 
 **Documentation milestone:**
 
 * [ ] Architecture diagram
-* [ ] CNN vs Transformer table
+* [x] CNN vs Transformer table
 * [ ] Qualitative comparison
-* [ ] Error analysis
+* [x] Error analysis
 
 ---
 
@@ -1039,7 +1065,7 @@ What is the trade-off between segmentation accuracy and inference efficiency?
 
 **Documentation milestone:**
 
-* [ ] API demo GIF
+* [x] API demo GIF
 * [ ] Latency benchmark
 * [ ] Deployment architecture
 * [ ] End-to-end demo
@@ -1070,16 +1096,16 @@ This prevents the README from becoming a collection of unsupported claims and en
 
 # 📊 Final Results
 
-The CNN baseline results are below. The remaining rows will be populated after the corresponding experiments are completed.
+Validation results for both models are below. Test-set results will be added after the corresponding evaluation is completed.
 
 ## Model Performance
 
-| Model                   |    IoU |   Dice | Precision | Recall | F1 |
-| ----------------------- | -----: | -----: | --------: | -----: | -: |
-| CNN Baseline (validation) | 0.8896 | 0.9416 |         — |      — |  — |
-| Transformer             |      — |      — |         — |      — |  — |
+| Model                         |    IoU |   Dice | Precision | Recall | F1 |
+| ----------------------------- | -----: | -----: | --------: | -----: | -: |
+| CNN Baseline / U-Net (validation) | 0.8896 | 0.9416 |         — |      — |  — |
+| Transformer / SegFormer-B0 (validation) | 0.8775 | 0.9348 |         — |      — |  — |
 
-> CNN baseline values are validation-set metrics at the saved checkpoint (epoch 33). Test-set evaluation, including precision, recall, and F1, is still to be added.
+> Validation-set metrics at each model's saved checkpoint (U-Net: epoch 33, SegFormer-B0: epoch 41). Test-set evaluation, including precision, recall, and F1, is still to be added.
 
 ## Deployment Performance
 
@@ -1148,11 +1174,11 @@ https://huggingface.co/datasets/blanchon/LEVIR_CDPlus
 
 🚧 **In Development**
 
-**Completed:** Phase 0 (setup), Phase 1 (dataset engineering), and Phase 2 (U-Net baseline: validation Dice 0.9416, IoU 0.8896).
+**Completed:** Phase 0 (setup), Phase 1 (dataset engineering), Phase 2 (U-Net baseline: validation Dice 0.9416, IoU 0.8896), and Phase 3 (SegFormer-B0 comparison: validation Dice 0.9348, IoU 0.8775).
 
-**Next:** Phase 3, a SegFormer model evaluated under the same protocol, plus a held-out test-set evaluation of the baseline (precision, recall, F1).
+**Next:** Phase 4 (geospatial polygon extraction), plus a held-out test-set evaluation of both models (precision, recall, F1).
 
-> **WHU Building Dataset → Dataset Engineering → Building Segmentation Baseline → Transformer Comparison**
+> **WHU Building Dataset → Dataset Engineering → Building Segmentation Baseline → Transformer Comparison → Geospatial Extraction**
 
 Results and visualizations will be added progressively as each experiment is completed.
 

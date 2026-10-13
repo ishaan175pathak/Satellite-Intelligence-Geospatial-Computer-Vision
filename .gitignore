@@ -2,3 +2,5 @@
 /data/ 
 **/__pycache__/
 **/__init__.py 
+unet_best_model.pth 
+segformer_mit-b0_best_model.pth 
