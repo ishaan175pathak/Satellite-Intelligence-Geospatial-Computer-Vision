@@ -1,0 +1,26 @@
+{
+  "arch": "oracle",
+  "split": "val",
+  "iou_threshold": 0.5,
+  "gt_min_area_px": 1,
+  "config": {
+    "threshold": 0.5,
+    "min_area_px": 30,
+    "min_score": 0.0,
+    "simplify_tolerance": 1.0
+  },
+  "metrics": {
+    "tp": 14058,
+    "fp": 0,
+    "fn": 482,
+    "n_pred": 14058,
+    "n_gt": 14540,
+    "precision": 1.0,
+    "recall": 0.9668500687757909,
+    "f1": 0.983145674522694,
+    "mean_matched_iou": 0.9636462394132063,
+    "n_tiles": 573,
+    "n_empty_tiles": 107,
+    "fp_on_empty_tiles": 0
+  }
+}
