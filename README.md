@@ -1,22 +1,22 @@
 # 🛰️ Satellite Intelligence & Geospatial Computer Vision
 
-> **An end-to-end Earth Observation computer vision system for satellite-image segmentation, building-footprint extraction, geospatial analysis, and multi-temporal change detection.**
+> **An end-to-end Earth Observation computer vision prototype for satellite-image segmentation, building-footprint extraction, and geospatial analysis.**
 
 
 ## 📌 Overview
 
 Satellite imagery provides a scalable way to monitor buildings, infrastructure, environmental changes, and urban development.
 
-This project develops a **production-oriented computer vision pipeline for Earth Observation**, beginning with high-resolution satellite imagery and building-footprint segmentation and progressively extending toward:
+This project develops an **end-to-end computer vision prototype for Earth Observation**, beginning with high-resolution satellite imagery and building-footprint segmentation and extending through:
 
 * Transformer-based segmentation
 * Geospatial polygon extraction
-* Multi-temporal change detection
 * Model evaluation and error analysis
-* Optimized inference
-* API-based deployment
+* API-based deployment (prototype)
 
 The project is designed to bridge **deep learning research and practical ML engineering**.
+
+> **Scope of this version.** This version covers data engineering, a U-Net baseline, a SegFormer-B0 comparison, an ensemble of the two, polygon extraction with object-level evaluation, and a prototype FastAPI service (ensemble model only) packaged as a Docker image. The API and the Docker image are the remaining work and are not built yet. Multi-temporal change detection (Phase 5) and model optimization (ONNX, TensorRT, latency benchmarking) are **not part of this version**; they are kept below as future work.
 
 ### Core Pipeline
 
@@ -58,6 +58,8 @@ The project is designed to bridge **deep learning research and practical ML engi
                Deployment / API
 ```
 
+*Multi-temporal analysis and change detection are future work and are not part of this version (see the scope note above).*
+
 ---
 
 # 🎯 Project Objectives
@@ -70,10 +72,10 @@ The primary objectives are to:
 * Evaluate transformer-based segmentation architectures.
 * Convert segmentation masks into geospatial polygons.
 * Investigate geographic generalization.
-* Extend the pipeline toward multi-temporal change detection.
+* Extend the pipeline toward multi-temporal change detection (future work, not part of this version).
 * Perform quantitative and qualitative error analysis.
-* Develop an inference pipeline suitable for deployment.
-* Investigate ONNX/TensorRT optimization where applicable.
+* Develop an inference pipeline and a prototype API (FastAPI, Docker).
+* ONNX/TensorRT optimization (future work, not part of this version).
 
 ---
 
@@ -131,7 +133,7 @@ The dataset provides high-resolution aerial imagery with pixel-level building ma
 ### Known Limitations
 
 * The aerial subset covers a **single region (Christchurch, New Zealand)**, so cross-city generalization cannot be measured directly from this dataset alone (see *Spatial Generalization* below).
-* Annotations are provided as **raster masks**, not vector GeoJSON. Polygons are derived from predicted masks in Phase 4 and are expressed in pixel coordinates unless the tiles carry georeferencing (checked by `src/data/download_dataset.py`).
+* Annotations are provided as **raster masks**, not vector GeoJSON. Polygons are derived from masks in Phase 4. The preprocessed tensors carry no georeferencing, so polygons are expressed in 512×512 tile pixel coordinates (x = column, y = row, origin at the top-left, y pointing down) and the exported GeoJSON declares this in its `coordinate_system` field. Real map coordinates would need a per-tile geotransform, which the pipeline does not currently have.
 * Only the `train` folder of the Hugging Face mirror was available, so it was split randomly 80/10/10 (seed 42) into train / validation / test (4586 / 573 / 573 tiles) during preprocessing. Because the split is random across tiles from one city, neighboring tiles can land in different splits, so the reported numbers are likely optimistic compared with a spatially disjoint split (see *Spatial Generalization* below).
 * About 17% of tiles contain no buildings, and buildings make up roughly 15% of all pixels, so the classes are imbalanced and pixel accuracy alone is misleading.
 
@@ -179,13 +181,13 @@ Add a screenshot showing:
 
 # 🧭 Future Dataset — LEVIR-CD+
 
-After establishing the initial segmentation pipeline, the project may be extended using **LEVIR-CD+**, a building change-detection dataset available on the Hugging Face Hub, for multi-temporal analysis.
+Change detection is **not part of this version**. A natural extension would use **LEVIR-CD+**, a building change-detection dataset available on the Hugging Face Hub, for multi-temporal analysis.
 
 Hugging Face mirror:
 
 **https://huggingface.co/datasets/blanchon/LEVIR_CDPlus**
 
-The objective is to investigate how bi-temporal imagery can be used to identify newly constructed or removed buildings. Dataset details (pair structure, mask format, license) will be confirmed from the dataset card before Phase 5 begins.
+The objective is to investigate how bi-temporal imagery can be used to identify newly constructed or removed buildings. Dataset details (pair structure, mask format, license) would need to be confirmed from the dataset card if this extension is pursued.
 
 ```text
 Image T1 ───────────────┐
@@ -274,9 +276,9 @@ Extracted building polygons
 
 ---
 
-# 🕒 Phase 3 — Multi-Temporal Change Detection
+# 🕒 Future Work — Multi-Temporal Change Detection
 
-The final stage investigates changes between satellite observations captured at different times.
+*Not part of this version.* A possible final stage would investigate changes between satellite observations captured at different times.
 
 Potential outputs include:
 
@@ -377,33 +379,39 @@ def forward(self, x):
 
 # ⚖️ CNN vs Transformer
 
-The project will compare the baseline and transformer architectures under consistent experimental conditions.
+The baseline, the transformer, and an ensemble of the two were compared under consistent experimental conditions: same splits, loss, optimizer, learning rate, batch size, and number of epochs, with all predictions thresholded at 0.5. The ensemble averages the per-pixel probabilities of the U-Net and SegFormer-B0 and involves no extra training.
 
-| Model                                   |    IoU |   Dice | Precision | Recall | F1 | Inference |
-| --------------------------------------- | -----: | -----: | --------: | -----: | -: | --------: |
-| CNN / U-Net, ResNet18 (validation)      | 0.8896 | 0.9416 |         — |      — |  — |         — |
-| Transformer / SegFormer-B0 (validation) | 0.8775 | 0.9348 |         — |      — |  — |         — |
+## 1. Pixel metrics on the validation set
 
-> Validation-set metrics at each model's saved checkpoint (U-Net: epoch 33, SegFormer-B0: epoch 41). Both models use the same splits, loss, optimizer, learning rate, batch size, and number of epochs. Precision, recall, F1, inference time, and test-set results will be added after the test evaluation. Metrics will only be added after the corresponding experiments have been completed.
+| Model                              |    IoU |   Dice | Precision | Recall |     F1 | Pixel acc. |
+| ---------------------------------- | -----: | -----: | --------: | -----: | -----: | ---------: |
+| CNN / U-Net, ResNet18              | 0.8896 | 0.9416 |    0.9421 | 0.9411 | 0.9416 |     0.9830 |
+| Transformer / SegFormer-B0         | 0.8775 | 0.9348 |    0.9411 | 0.9286 | 0.9348 |     0.9811 |
+| Ensemble (U-Net + SegFormer-B0)    | 0.8933 | 0.9437 |    0.9484 | 0.9390 | 0.9437 |     0.9837 |
+
+## 2. Pixel metrics on the test set
+
+| Model                              |    IoU |   Dice | Precision | Recall |     F1 | Pixel acc. |
+| ---------------------------------- | -----: | -----: | --------: | -----: | -----: | ---------: |
+| CNN / U-Net, ResNet18              | 0.8857 | 0.9394 |    0.9415 | 0.9373 | 0.9394 |     0.9824 |
+| Transformer / SegFormer-B0         | 0.8726 | 0.9320 |    0.9396 | 0.9245 | 0.9320 |     0.9803 |
+| Ensemble (U-Net + SegFormer-B0)    | 0.8903 | 0.9420 |    0.9480 | 0.9361 | 0.9420 |     0.9832 |
+
+> Metrics are computed from pixel counts accumulated over the whole split (573 tiles each). For binary segmentation with global counts, F1 is mathematically identical to Dice; both are listed because both are commonly reported. Validation numbers use each model's saved checkpoint (U-Net: epoch 33, SegFormer-B0: epoch 41). Re-evaluating the U-Net on the validation split with the evaluation script reproduces the training-time values (Dice 0.9416, IoU 0.8896). Inference latency was not measured in this version.
 
 ### Comparison
 
-* **The U-Net is ahead on validation:** Dice 0.9416 vs 0.9348 (+0.0068), IoU 0.8896 vs 0.8775 (+0.0121), and a lower validation loss (0.0688 vs 0.0801).
-* **The gap is larger than typical epoch-to-epoch noise.** Over the last ten epochs the U-Net's validation Dice is mostly 0.939–0.943, while SegFormer-B0's is 0.925–0.933 from epoch 44 onward (after its epoch-42 spike).
-* **Caveats:** one training run per model with no repeated seeds. SegFormer-B0 is the smallest SegFormer variant and was trained with the U-Net's learning rate without tuning. Checkpoints were selected by validation loss, so the validation numbers are slightly optimistic for both models. Test-set metrics are still to be added.
-* The result therefore reads as "SegFormer-B0 did not beat the U-Net baseline under identical settings", not as a general statement about transformers.
+* **The U-Net is ahead of SegFormer-B0 on validation:** Dice 0.9416 vs 0.9348 (+0.0068), IoU 0.8896 vs 0.8775 (+0.0121), and a lower validation loss (0.0688 vs 0.0801). The same ordering holds on the test set (Dice 0.9394 vs 0.9320, IoU 0.8857 vs 0.8726).
+* **The ensemble is best on every pixel metric on both splits, but by small margins.** On the test set its Dice is 0.9420 vs 0.9394 for the U-Net (+0.0026) and its IoU is 0.8903 vs 0.8857 (+0.0046); on validation the gains are +0.0021 Dice and +0.0037 IoU. Most of the gain comes from higher precision (test: 0.9480 vs 0.9415).
+* **The U-Net/SegFormer gap is larger than typical epoch-to-epoch noise.** Over the last ten epochs the U-Net's validation Dice is mostly 0.939–0.943, while SegFormer-B0's is 0.925–0.933 from epoch 44 onward (after its epoch-42 spike).
+* **All three models are slightly conservative:** precision is higher than recall on both splits (test: U-Net 0.9415 vs 0.9373, SegFormer-B0 0.9396 vs 0.9245, ensemble 0.9480 vs 0.9361), so they miss more building pixels than they invent.
+* **Test scores are slightly below validation for every model** (for example U-Net IoU 0.8896 → 0.8857), which is expected because checkpoints were selected on validation. The split is random across tiles from one city, so both sets of numbers are likely optimistic compared with a spatially disjoint split.
+* **Caveats:** one training run per model with no repeated seeds and no confidence intervals. SegFormer-B0 is the smallest SegFormer variant and was trained with the U-Net's learning rate without tuning. The ensemble gain is small and requires running both networks, so it costs roughly two forward passes per tile.
+* The result therefore reads as "SegFormer-B0 did not beat the U-Net baseline under identical settings, and averaging the two gave a small further improvement", not as a general statement about transformers.
 
 ### Qualitative Comparison
 
-Per-model test-set figures are in *Error Analysis* below. Each figure selects its tiles by that model's own IoU, so a same-tile side-by-side comparison is still to be added.
-
-<!-- IMAGE PLACEHOLDER
-
-Add:
-
-Ground Truth | CNN Prediction | Transformer Prediction
-
--->
+Per-model test-set figures are in *Error Analysis* and *Geospatial Extraction* below. Each figure selects its tiles by that model's own per-tile IoU, so most tiles differ between models. A strict same-tile side-by-side (ground truth | U-Net | SegFormer-B0 on one fixed set of tiles) is still to be added.
 
 ---
 
@@ -470,11 +478,9 @@ mask = load_binary_mask(
 <!-- CODE PLACEHOLDER -->
 
 ```python
-prediction = model(image)
+predictor = SegmentationPredictor.from_checkpoints(["unet", "segformer"])
 
-building_mask = postprocess(
-    prediction
-)
+probs = predictor.predict_each(images)   # {"unet": ..., "segformer": ..., "ensemble": ...}
 ```
 
 ## Example — Polygon Extraction
@@ -482,9 +488,10 @@ building_mask = postprocess(
 <!-- CODE PLACEHOLDER -->
 
 ```python
-polygons = extract_building_polygons(
-    building_mask
-)
+config = PolygonConfig(threshold=0.5, min_area_px=30, min_score=0.0, simplify_tolerance=1.0)
+
+buildings = extract_buildings(probs["ensemble"][0].numpy(), config)
+# -> list of Building(polygon, area_px, score)
 ```
 
 > Full implementations are available in the `src/` directory.
@@ -545,18 +552,18 @@ SegFormer-B0 (`nvidia/mit-b0`) was trained for 50 epochs with the same loss, opt
 
 ### Object-Level Metrics
 
-Where applicable:
+Computed by `src/geospatial/evaluate_polygons.py`:
 
-* Building detection precision
-* Building detection recall
-* Polygon IoU
-* Object-level F1
-* False-positive count
-* Missed-building count
+* Building detection precision, recall, and F1 (a predicted polygon is a true positive if it is matched one-to-one with a ground-truth building at IoU ≥ 0.5)
+* Mean IoU of the matched buildings
+* False-positive count and missed-building count
+* False-positive polygons on tiles that contain no buildings
+
+The ground truth is raster only, so ground-truth polygons are derived from the ground-truth masks with the same extraction (exact pixel-edge outlines, no simplification, no minimum area). Counts are per tile: a building cut by a tile edge counts separately in each tile it touches.
 
 ### Efficiency Metrics
 
-For deployment experiments:
+Not evaluated in this version: no latency, throughput, memory, or model-size benchmark was run. The prototype API is planned to report the inference time of each request, which would give only a rough indication on whatever hardware it runs on. A proper efficiency study would measure:
 
 * Inference latency
 * Images per second
@@ -604,6 +611,139 @@ What the examples show:
 * On the shared tile `train_2461`, the two models score almost identically (IoU 0.984 vs 0.985).
 
 These are qualitative observations from seven tiles per model, only three of which are shared. A quantitative breakdown by building size and tile type is still to be done.
+
+---
+
+# 🛰️ Geospatial Extraction (Phase 4)
+
+Predicted probability maps are converted into building-footprint polygons by `src/geospatial/polygons.py`.
+
+```text
+Probability map
+      │  threshold
+      ▼
+4-connected components
+      │  drop small / low-confidence components
+      ▼
+Contour tracing (courtyards kept as holes)
+      │
+      ▼
+Shapely polygon
+      │  Douglas-Peucker simplification
+      ▼
+Building footprint
+```
+
+* **Components are 4-connected:** buildings that share an edge merge into one polygon, while buildings that only touch at a corner stay separate.
+* **False-positive filtering:** `min_area_px` drops components with fewer pixels than the limit, and `min_score` drops components whose mean model probability is below the limit.
+* **Pixel-edge outlines:** an unsimplified polygon has exactly the pixel count of its component for axis-aligned shapes and is within about 1–3% for diagonal or curved outlines, so polygon IoU is comparable to pixel IoU.
+* **Simplification:** topology-preserving Douglas-Peucker with a 1-pixel tolerance. Courtyards are kept as polygon holes.
+
+### Evaluation protocol
+
+Post-processing settings were swept on the **validation** split (threshold 0.4 / 0.5 / 0.6, minimum area 10 / 30 / 60 / 100 px, minimum score 0 / 0.7, simplification fixed at 1 px; 24 configurations per model). The object-level **test** results below use the **default settings** (threshold 0.5, minimum area 30 px, minimum score 0, simplification 1 px), not the sweep winners. Scoring the validation-tuned settings on the test split has not been done.
+
+### Validation sweep
+
+Validation split: 573 tiles, 14,540 ground-truth buildings, object matching at IoU ≥ 0.5.
+
+| Model      | Default settings: P / R / F1 | Best settings (threshold / min area / min score) | Best: P / R / F1         | ΔF1    |
+| ---------- | ---------------------------- | ------------------------------------------------ | ------------------------ | -----: |
+| U-Net      | 0.8885 / 0.8242 / 0.8551     | 0.4 / 10 / 0.7                                   | 0.9236 / 0.8159 / 0.8664 | +0.011 |
+| SegFormer  | 0.8804 / 0.8048 / 0.8409     | 0.5 / 60 / 0.7                                   | 0.9223 / 0.7988 / 0.8562 | +0.015 |
+| Ensemble   | 0.8982 / 0.8237 / 0.8593     | 0.5 / 10 / 0.7                                   | 0.9432 / 0.8135 / 0.8736 | +0.014 |
+
+* A minimum score of 0.7 is part of the best configuration for all three models. It mainly removes low-confidence false-positive blobs: precision rises by about 3.5–4.5 points while recall drops by about 0.6–1 point.
+* Without a score filter, lower thresholds produce more false alarms on empty tiles (for the ensemble, 19 polygons at threshold 0.4 / min area 10 / min score 0, versus 3 with min score 0.7).
+* The optimum is flat: for the U-Net the four best configurations are within about 0.001 F1, so the exact winner should not be over-read. The U-Net and ensemble winners also sit at the edge of the grid (minimum area 10 px; threshold 0.4 for the U-Net), so a wider sweep might move them slightly.
+
+### Object-level results on the test set (default settings)
+
+Test split: 573 tiles (87 without any ground-truth building), 14,927 ground-truth buildings, matching at IoU ≥ 0.5.
+
+| Model      | Predicted | TP     | FP    | Missed | Precision | Recall |     F1 | Mean matched IoU | FP polygons on empty tiles |
+| ---------- | --------: | -----: | ----: | -----: | --------: | -----: | -----: | ---------------: | -------------------------: |
+| U-Net      |    13,863 | 12,264 | 1,599 |  2,663 |    0.8847 | 0.8216 | 0.8520 |           0.8695 |                          3 |
+| SegFormer  |    13,777 | 12,029 | 1,748 |  2,898 |    0.8731 | 0.8059 | 0.8381 |           0.8511 |                          2 |
+| Ensemble   |    13,754 | 12,333 | 1,421 |  2,594 |    0.8967 | 0.8262 | 0.8600 |           0.8679 |                          1 |
+
+* The ordering matches the pixel metrics: ensemble (F1 0.8600) > U-Net (0.8520) > SegFormer-B0 (0.8381). The ensemble has both fewer false positives (1,421 vs 1,599) and fewer misses (2,594 vs 2,663) than the U-Net.
+* **Recall is the limiting factor.** Even the ensemble misses about 17% of the buildings (2,594 of 14,927) at IoU ≥ 0.5, while precision is about 0.90.
+* Matched buildings overlap their ground truth with a mean IoU of 0.85–0.87.
+* Very few polygons are produced on tiles without buildings (1–3 across 87 empty test tiles).
+
+### Ceiling check
+
+Feeding the ground-truth mask through the same extraction as if it were a prediction (validation split, default settings) gives precision 1.000, recall 0.9669 (482 of 14,540 buildings lost), F1 0.9831, and mean matched IoU 0.9636. The conversion itself therefore caps object-level recall near 0.97 and matched IoU near 0.96, so most of the models' remaining gap comes from the models rather than from the polygon conversion. The lost buildings are most plausibly the tiny ones removed by the 30-pixel minimum-area filter, but the effects of the minimum area and of simplification were not measured separately.
+
+### Polygon visualizations
+
+Columns: input, ground-truth polygons, predicted polygons, and object matching (green = matched building at IoU ≥ 0.5, red = false alarm, blue = missed building). Tiles come from the test split and are chosen by each model's per-tile pixel IoU (2 best, 2 median, 2 worst among tiles containing buildings, plus 1 empty tile). All figures use the default settings.
+
+#### Ensemble (U-Net + SegFormer-B0)
+
+![Test-set polygon extraction for the ensemble: input, ground-truth polygons, predicted polygons, and object matching for best, median, worst, and empty tiles](results/visualizations/whu_test_polygons_ensemble.png)
+
+#### SegFormer-B0
+
+![Test-set polygon extraction for SegFormer-B0: input, ground-truth polygons, predicted polygons, and object matching for best, median, worst, and empty tiles](results/visualizations/whu_test_polygons_segformer.png)
+
+#### U-Net (ResNet18 encoder)
+
+![Test-set polygon extraction for the U-Net: input, ground-truth polygons, predicted polygons, and object matching for best, median, worst, and empty tiles](results/visualizations/whu_test_polygons_unet.png)
+
+What the examples show:
+
+* Large, simple roofs are matched cleanly. On `train_2461`, the best tile in all three figures, every ground-truth building is matched by every model (tile IoU 0.987 ensemble, 0.985 SegFormer-B0, 0.984 U-Net), with one or two small false-alarm polygons in the yard (ensemble 1, SegFormer-B0 1, U-Net 2).
+* Dense residential tiles are where buildings are missed. In the median tiles shown, roughly 77–79% of ground-truth buildings are matched (SegFormer-B0 `train_0567`: 43 of 55; SegFormer-B0 `train_3589`: 64 of 81; U-Net `train_3894`: 41 of 53). The missed buildings are mostly small structures, with a handful of false alarms per tile.
+* Tiny buildings are the clearest failure mode, now at the object level too. The worst tile in each figure contains a single tiny building and no predicted polygon (`train_0896` in all three, `train_1073` for the ensemble and U-Net, `train_0760` for SegFormer-B0).
+* On `train_2282`, the ensemble matches 7 of 8 buildings with no false alarms, while SegFormer-B0 matches 6 of 8 with 4 false alarms. Both miss the same large warehouse at the top-left.
+* On the empty tile `train_1906`, the models produce 2 (ensemble), 1 (SegFormer-B0) and 2 (U-Net) false-alarm polygons near the left edge of the tile.
+
+These are qualitative observations from seven tiles per model, and the tiles differ between figures except for `train_2461`, `train_0896`, and `train_1906`, which appear in all three.
+
+### Limitations
+
+* **Adjacent buildings merge.** A semantic mask cannot separate buildings that share an edge, so a row of attached houses becomes one polygon. This lowers object-level recall and cannot be fixed with thresholds; an instance-splitting step (for example watershed) is future work. Its effect has not been quantified.
+* **Pixel coordinates only.** The preprocessed tiles carry no georeferencing, so polygons are in tile pixel coordinates (see *Known Limitations*).
+* **Optimistic split.** The random tile split means object-level numbers are likely optimistic compared with a spatially disjoint split.
+* **Default settings on test.** The reported test results do not use the validation-tuned settings (see *Evaluation protocol*).
+
+### GeoJSON output
+
+`src/geospatial/export.py` writes one GeoJSON `FeatureCollection` per tile. Each feature is a `Polygon` with the properties `id`, `area_px` (component pixel count), `score` (mean model probability), and `model`. The collection also declares its coordinate system, so it is not mistaken for WGS84 data:
+
+```json
+{
+  "type": "FeatureCollection",
+  "coordinate_system": "pixel",
+  "name": "<tile>.png",
+  "y_axis": "down",
+  "image_size": [512, 512],
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "Polygon", "coordinates": [[[x, y], ...]]},
+      "properties": {"id": 0, "area_px": 0, "score": 0.0, "model": "ensemble"}
+    }
+  ]
+}
+```
+
+*(Structure only; the values above are placeholders.)* The exports generated so far are for `train_0896`, which has no predicted polygons for any model, so those files contain an empty feature list. An example file for a tile with predicted buildings is still to be added. If a per-tile geotransform becomes available, the exporter can write map coordinates instead.
+
+### Reproducing the Phase 4 results
+
+```bash
+python -m src.visualizationAndEvaluation.evaluate_test --split test         # pixel metrics, all models
+python -m src.geospatial.evaluate_polygons --arch ensemble --split val --sweep
+python -m src.geospatial.evaluate_polygons --arch ensemble --split test     # object-level metrics
+python -m src.geospatial.visualize_polygons --arch ensemble                 # polygon figure
+python -m src.geospatial.export --arch ensemble --tiles train_2461          # GeoJSON for one tile
+python -m pytest tests                                                      # unit tests
+```
+
+Use `--arch unet` or `--arch segformer` for the single models, and `--arch oracle` for the ceiling check.
 
 ---
 
@@ -683,6 +823,8 @@ The project follows a modular ML-system design.
                  └─────────────────┘
 ```
 
+*Change detection is future work and is not part of this version.*
+
 ### Architecture Diagram
 
 <!-- IMAGE PLACEHOLDER
@@ -703,6 +845,10 @@ satellite-intelligence/
 │
 ├── data/
 │   ├── raw/
+│   │   └── whu_building/
+│   │       ├── .cache/
+│   │       └── train/
+│   │    
 │   └── processed/
 │       ├── train/
 │       ├── val/
@@ -713,7 +859,17 @@ satellite-intelligence/
 │   │   ├── learning_curves.png
 │   │   ├── learning_curves_transformer.png
 │   │   ├── whu_test_predictions.png
-│   │   └── whu_test_predictions_transformer.png
+│   │   ├── whu_test_predictions_transformer.png
+│   │   ├── whu_test_polygons_unet.png
+│   │   ├── whu_test_polygons_segformer.png
+│   │   └── whu_test_polygons_ensemble.png
+│   │
+│   ├── pixel_metrics_val.csv
+│   ├── pixel_metrics_test.csv
+│   ├── polygon_metrics_{unet,segformer,ensemble}_test.json
+│   ├── polygon_metrics_oracle_val.json
+│   ├── polygon_sweep_{unet,segformer,ensemble}_val.csv
+│   ├── geojson/
 │   │
 │   ├── diagrams/
 │   │   └── system_architecture.png
@@ -738,17 +894,26 @@ satellite-intelligence/
 │   ├── data/
 │   │   └── download_dataset.py
 │   │
-│   ├── visualization & Evaluation/
+│   ├── visualizationAndEvaluation/
 │   │   ├── visualize_unet.py
-│   │   └── visualize-segmentation_transformer.py
+│   │   ├── visualize-segmentation_transformer.py
+│   │   └── evaluate_test.py
 │   │
 │   ├── inference/
 │   │   └── predictor.py
+│   │
+│   ├── geospatial/
+│   │   ├── polygons.py
+│   │   ├── evaluate_polygons.py
+│   │   ├── visualize_polygons.py
+│   │   └── export.py
 │   │
 ├── api/
 │   └── app.py
 │
 ├── tests/
+│   ├── conftest.py
+│   └── test_geospatial.py
 │
 ├── train.py
 ├── mask_check.png
@@ -765,7 +930,7 @@ satellite-intelligence/
 
 # 🚀 Deployment
 
-The final stage will explore deployment of the trained model as an inference service.
+A prototype inference service is the remaining work for this version. **It is not built yet.** It will serve the **ensemble model only** (the average of the U-Net and SegFormer-B0 probabilities, the best configuration in the evaluation above) and will be packaged as a Docker image. Because it is a prototype rather than a production service, it runs both networks on every image, which is roughly twice the cost of a single model, and it has no latency target.
 
 ```text
 Satellite Image
@@ -774,7 +939,7 @@ Satellite Image
      FastAPI
        │
        ▼
- Model Inference
+ Model Inference (ensemble)
        │
        ▼
 Segmentation Mask
@@ -786,18 +951,17 @@ Polygon Extraction
 Geospatial Response
 ```
 
-### API Demo
+### API Demo (preview)
 
-The following animation illustrates the end-to-end workflow, from
-image upload and model inference to building-mask visualization.
+The animation below is a **preview of the intended workflow**, from image upload and model inference to building-mask visualization. It is not a recording of a running service, and it will be replaced with a recording once the API exists.
 
 ![WHU Building Segmentation Pipeline](results/demos/whu_building_segmentation_pipeline_demo.gif)
 
 ---
 
-# ⚡ Model Optimization
+# ⚡ Model Optimization (Future Work)
 
-Where supported by the selected architecture, the project will investigate:
+Not part of this version. A possible path for future work:
 
 ```text
 PyTorch Model
@@ -815,14 +979,11 @@ TensorRT
 Optimized Inference
 ```
 
-Performance will be measured rather than assumed.
+Any future optimization results should be measured rather than assumed.
 
 ### Benchmark
 
-| Model     | Input Size | Latency | FPS | Memory |
-| --------- | ---------: | ------: | --: | -----: |
-| Baseline  |          — |       — |   — |      — |
-| Optimized |          — |       — |   — |      — |
+Not measured: no latency, throughput, or memory benchmark was run for this version.
 
 ---
 
@@ -857,14 +1018,27 @@ model:                              # two separate runs
 evaluation:
   checkpoint_selection: lowest validation loss
   threshold: 0.5
-  metrics_so_far:
+  pixel_metrics:                    # validation and test, per model and ensemble
     - iou
     - dice
-    - pixel_accuracy
-  planned_on_test:
     - precision
     - recall
     - f1
+    - pixel_accuracy
+  ensemble: mean of U-Net and SegFormer-B0 probabilities (no extra training)
+
+polygon_extraction:
+  connectivity: 4
+  threshold: 0.5                    # defaults, used for the reported test results
+  min_area_px: 30
+  min_score: 0.0
+  simplify_tolerance_px: 1.0
+  object_match_iou: 0.5
+  validation_sweep:
+    threshold: [0.4, 0.5, 0.6]
+    min_area_px: [10, 30, 60, 100]
+    min_score: [0.0, 0.7]
+    simplify_tolerance_px: [1.0]
 ```
 
 ---
@@ -889,11 +1063,11 @@ How accurately can pixel-level predictions be converted into usable geospatial b
 
 ### RQ5
 
-Can multi-temporal satellite imagery be used to identify urban development and structural changes?
+Can multi-temporal satellite imagery be used to identify urban development and structural changes? *(Future work; not addressed in this version.)*
 
 ### RQ6
 
-What is the trade-off between segmentation accuracy and inference efficiency?
+What is the trade-off between segmentation accuracy and inference efficiency? *(Not addressed in this version; no latency benchmark was run.)*
 
 ---
 
@@ -918,10 +1092,10 @@ What is the trade-off between segmentation accuracy and inference efficiency?
 
 ### Geospatial
 
-* Rasterio
-* GeoPandas
-* Shapely
-* GDAL
+* Shapely (used in Phase 4)
+* Rasterio (planned)
+* GeoPandas (planned)
+* GDAL (planned)
 
 ### Data & Analysis
 
@@ -934,7 +1108,7 @@ What is the trade-off between segmentation accuracy and inference efficiency?
 ### Engineering
 
 * Git
-* Docker
+* Docker (planned)
 * pytest
 * YAML configuration
 * Structured logging
@@ -942,10 +1116,10 @@ What is the trade-off between segmentation accuracy and inference efficiency?
 
 ### Deployment
 
-* FastAPI
-* ONNX
-* ONNX Runtime
-* TensorRT
+* FastAPI (planned, prototype)
+* ONNX (not used)
+* ONNX Runtime (not used)
+* TensorRT (not used)
 
 ---
 
@@ -1013,29 +1187,31 @@ What is the trade-off between segmentation accuracy and inference efficiency?
 
 * [ ] Architecture diagram
 * [x] CNN vs Transformer table
-* [ ] Qualitative comparison
+* [x] Qualitative comparison
 * [x] Error analysis
 
 ---
 
 ## Phase 4 — Geospatial Extraction
 
-* [ ] Convert masks to polygons
-* [ ] Extract building contours
-* [ ] Filter false-positive regions
-* [ ] Simplify polygons where appropriate
-* [ ] Compare predictions with ground truth
-* [ ] Generate geospatial visualizations
+* [x] Convert masks to polygons
+* [x] Extract building contours
+* [x] Filter false-positive regions
+* [x] Simplify polygons where appropriate
+* [x] Compare predictions with ground truth
+* [x] Generate geospatial visualizations
 
 **Documentation milestone:**
 
-* [ ] Polygon extraction visualization
-* [ ] Object-level metrics
-* [ ] Geospatial output example
+* [x] Polygon extraction visualization
+* [x] Object-level metrics
+* [x] Geospatial output example
 
 ---
 
-## Phase 5 — Multi-Temporal Change Detection
+## Phase 5 — Multi-Temporal Change Detection (not pursued in this version)
+
+*Descoped and kept as future work.*
 
 * [ ] Investigate LEVIR-CD+ (Hugging Face)
 * [ ] Understand temporal annotations
@@ -1053,20 +1229,22 @@ What is the trade-off between segmentation accuracy and inference efficiency?
 
 ---
 
-## Phase 6 — Deployment & Optimization
+## Phase 6 — Deployment (prototype)
 
 * [ ] Build inference interface
-* [ ] Develop FastAPI service
+* [ ] Develop FastAPI service (ensemble model only)
 * [ ] Containerize with Docker
-* [ ] Export model to ONNX
-* [ ] Benchmark inference
-* [ ] Investigate TensorRT
-* [ ] Document accuracy/latency trade-offs
+
+**Not pursued in this version (future work):**
+
+* Export model to ONNX
+* Benchmark inference
+* Investigate TensorRT
+* Document accuracy/latency trade-offs
 
 **Documentation milestone:**
 
-* [x] API demo GIF
-* [ ] Latency benchmark
+* [ ] API demo GIF (a preview exists; replace it with a recording of the running service)
 * [ ] Deployment architecture
 * [ ] End-to-end demo
 
@@ -1086,9 +1264,9 @@ Every major development phase should contribute at least one visual artifact.
 | Segmentation     | Prediction comparison        |
 | Transformer      | Architecture + comparison    |
 | Geospatial       | Polygon overlay              |
-| Change Detection | Before/after/change map      |
+| Change Detection | Before/after/change map (future work) |
 | Deployment       | API/GIF demo                 |
-| Optimization     | Benchmark table              |
+| Optimization     | Benchmark table (future work) |
 
 This prevents the README from becoming a collection of unsupported claims and ensures that reported results correspond to actual experiments.
 
@@ -1096,25 +1274,31 @@ This prevents the README from becoming a collection of unsupported claims and en
 
 # 📊 Final Results
 
-Validation results for both models are below. Test-set results will be added after the corresponding evaluation is completed.
+All numbers come from a single training run per model. Validation results are in the *CNN vs Transformer* section; the test-set results are below.
 
-## Model Performance
+## Model Performance (test split, pixel level)
 
-| Model                         |    IoU |   Dice | Precision | Recall | F1 |
-| ----------------------------- | -----: | -----: | --------: | -----: | -: |
-| CNN Baseline / U-Net (validation) | 0.8896 | 0.9416 |         — |      — |  — |
-| Transformer / SegFormer-B0 (validation) | 0.8775 | 0.9348 |         — |      — |  — |
+| Model                           |    IoU |   Dice | Precision | Recall |     F1 | Pixel acc. |
+| ------------------------------- | -----: | -----: | --------: | -----: | -----: | ---------: |
+| CNN Baseline / U-Net            | 0.8857 | 0.9394 |    0.9415 | 0.9373 | 0.9394 |     0.9824 |
+| Transformer / SegFormer-B0      | 0.8726 | 0.9320 |    0.9396 | 0.9245 | 0.9320 |     0.9803 |
+| Ensemble (U-Net + SegFormer-B0) | 0.8903 | 0.9420 |    0.9480 | 0.9361 | 0.9420 |     0.9832 |
 
-> Validation-set metrics at each model's saved checkpoint (U-Net: epoch 33, SegFormer-B0: epoch 41). Test-set evaluation, including precision, recall, and F1, is still to be added.
+## Building Detection (test split, object level)
+
+Predicted polygons matched one-to-one with ground-truth buildings at IoU ≥ 0.5, using the default polygon settings.
+
+| Model                           | Precision | Recall |     F1 | Mean matched IoU |
+| ------------------------------- | --------: | -----: | -----: | ---------------: |
+| CNN Baseline / U-Net            |    0.8847 | 0.8216 | 0.8520 |           0.8695 |
+| Transformer / SegFormer-B0      |    0.8731 | 0.8059 | 0.8381 |           0.8511 |
+| Ensemble (U-Net + SegFormer-B0) |    0.8967 | 0.8262 | 0.8600 |           0.8679 |
+
+> Settings tuned on the validation split improved object-level F1 by 0.011–0.015 there (see *Geospatial Extraction*), but those settings have not been scored on the test split.
 
 ## Deployment Performance
 
-| Configuration | Latency | FPS | Memory |
-| ------------- | ------: | --: | -----: |
-| Baseline      |       — |   — |      — |
-| Optimized     |       — |   — |      — |
-
-> No performance numbers will be added until they are obtained from actual experiments.
+Not measured in this version: no latency, throughput, or memory benchmark was run.
 
 ---
 
@@ -1174,9 +1358,11 @@ https://huggingface.co/datasets/blanchon/LEVIR_CDPlus
 
 🚧 **In Development**
 
-**Completed:** Phase 0 (setup), Phase 1 (dataset engineering), Phase 2 (U-Net baseline: validation Dice 0.9416, IoU 0.8896), and Phase 3 (SegFormer-B0 comparison: validation Dice 0.9348, IoU 0.8775).
+**Completed:** Phase 0 (setup), Phase 1 (dataset engineering), Phase 2 (U-Net baseline: test Dice 0.9394, IoU 0.8857), Phase 3 (SegFormer-B0 comparison: test Dice 0.9320, IoU 0.8726; ensemble of the two: test Dice 0.9420, IoU 0.8903), and Phase 4 (geospatial polygon extraction: object-level test F1 0.8600 for the ensemble at IoU ≥ 0.5 with default settings).
 
-**Next:** Phase 4 (geospatial polygon extraction), plus a held-out test-set evaluation of both models (precision, recall, F1).
+**Open items from earlier phases:** architecture diagram, a same-tile side-by-side model comparison, a GeoJSON example for a tile with predicted buildings, scoring the validation-tuned polygon settings on the test split, and a spatially disjoint evaluation.
+
+**Next:** the prototype FastAPI service (ensemble model only) and its Docker image, followed by a final README pass. Phase 5 (multi-temporal change detection) and model optimization (ONNX, TensorRT, latency benchmarking) are not part of this version.
 
 > **WHU Building Dataset → Dataset Engineering → Building Segmentation Baseline → Transformer Comparison → Geospatial Extraction**
 
