@@ -175,7 +175,7 @@ Add a screenshot showing:
 └───────────────┴───────────────────┴──────────────────┘
 
 -->
-![Satellite Visualization, masks and preprocessed masks](mask_check.png)
+![Satellite Visualization, masks and preprocessed masks](results/visualizations/mask_check.png)
 
 ---
 
@@ -855,9 +855,19 @@ satellite-intelligence/
 │       └── test/
 │
 ├── results/
+│   ├── demos/
+│   │   ├── end_to_end_demo.gif
+│   │   └── api_demo.gif
+│   │
+│   ├── diagrams/
+│   │   └── system_architecture.png
+│   │
+│   ├── geojson/
+│   │
 │   ├── visualizations/
 │   │   ├── learning_curves.png
 │   │   ├── learning_curves_transformer.png
+│   │   ├── mask_check.png
 │   │   ├── whu_test_predictions.png
 │   │   ├── whu_test_predictions_transformer.png
 │   │   ├── whu_test_polygons_unet.png
@@ -868,15 +878,7 @@ satellite-intelligence/
 │   ├── pixel_metrics_test.csv
 │   ├── polygon_metrics_{unet,segformer,ensemble}_test.json
 │   ├── polygon_metrics_oracle_val.json
-│   ├── polygon_sweep_{unet,segformer,ensemble}_val.csv
-│   ├── geojson/
-│   │
-│   ├── diagrams/
-│   │   └── system_architecture.png
-│   │
-│   └── demos/
-│       ├── end_to_end_demo.gif
-│       └── api_demo.gif
+│   └── polygon_sweep_{unet,segformer,ensemble}_val.csv
 │
 ├── src/
 │   ├── code/
@@ -888,8 +890,9 @@ satellite-intelligence/
 │   │   ├── loss.py
 │   │   ├── metrics.py
 │   │   ├── model.py
-│   │   ├── trainer.py
-│   │   └── preprocessing.py
+│   │   ├── preprocessing.py
+│   │   ├── segformer.py
+│   │   └── trainer.py
 │   │
 │   ├── data/
 │   │   └── download_dataset.py
@@ -902,21 +905,17 @@ satellite-intelligence/
 │   ├── inference/
 │   │   └── predictor.py
 │   │
-│   ├── geospatial/
-│   │   ├── polygons.py
-│   │   ├── evaluate_polygons.py
-│   │   ├── visualize_polygons.py
-│   │   └── export.py
-│   │
-├── api/
-│   └── app.py
+│   └── geospatial/
+│       ├── polygons.py
+│       ├── evaluate_polygons.py
+│       ├── visualize_polygons.py
+│       └── export.py
 │
 ├── tests/
 │   ├── conftest.py
 │   └── test_geospatial.py
 │
 ├── train.py
-├── mask_check.png
 ├── unet_best_model.pth
 ├── unet_training_log.csv
 ├── segformer_mit-b0_best_model.pth
@@ -1231,9 +1230,9 @@ What is the trade-off between segmentation accuracy and inference efficiency? *(
 
 ## Phase 6 — Deployment (prototype)
 
-* [ ] Build inference interface
-* [ ] Develop FastAPI service (ensemble model only)
-* [ ] Containerize with Docker
+* [x] Build inference interface
+* [x] Develop FastAPI service (ensemble model only)
+* [x] Containerize with Docker
 
 **Not pursued in this version (future work):**
 
@@ -1256,17 +1255,17 @@ This repository will be documented progressively as the system is built.
 
 Every major development phase should contribute at least one visual artifact.
 
-| Phase            | Documentation                |
-| ---------------- | ---------------------------- |
-| Dataset          | Image + annotations          |
-| Preprocessing    | Transformation visualization |
-| Baseline         | Training curves              |
-| Segmentation     | Prediction comparison        |
-| Transformer      | Architecture + comparison    |
-| Geospatial       | Polygon overlay              |
-| Change Detection | Before/after/change map (future work) |
-| Deployment       | API/GIF demo                 |
-| Optimization     | Benchmark table (future work) |
+| Phase            | Documentation                          |
+| ---------------- | -------------------------------------- |
+| Dataset          | Image + annotations                    |
+| Preprocessing    | Transformation visualization           |
+| Baseline         | Training curves                        |
+| Segmentation     | Prediction comparison                  |
+| Transformer      | Architecture + comparison              |
+| Geospatial       | Polygon overlay                        |
+| Change Detection | Before/after/change map (future work)  |
+| Deployment       | API/GIF demo                           |
+| Optimization     | Benchmark table (future work)          |
 
 This prevents the README from becoming a collection of unsupported claims and ensures that reported results correspond to actual experiments.
 
