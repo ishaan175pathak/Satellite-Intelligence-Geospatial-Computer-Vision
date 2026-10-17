@@ -1,0 +1,26 @@
+
+# Virtual environment
+venv/
+.venv/
+
+# Dataset
+data/
+data/**
+
+# Python cache
+**/__pycache__/
+*.py[cod]
+
+# Git metadata
+.git/
+
+# Tests and development artifacts
+.pytest_cache/
+.mypy_cache/
+
+# Local environment files
+.env
+.env.*
+
+# Training logs
+*_training_log.csv
