@@ -137,6 +137,7 @@ class SegmentationPredictor:
             path = checkpoints.get(arch) or os.path.join(
                 os.getcwd(), DEFAULT_CHECKPOINTS[arch]
             )
+            print(path)
             print(f"[INFO] Loading {arch} from {path}")
             models[arch] = load_model(arch, path, device, segformer_name)
 

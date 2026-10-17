@@ -1,5 +1,6 @@
 import argparse
 import os
+from dotenv import load_dotenv
 
 import torch
 from torch.utils.data import DataLoader
@@ -52,6 +53,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
 
+    load_dotenv()
     args = parse_args()
 
     # Same seed for every model so comparisons are fair.
