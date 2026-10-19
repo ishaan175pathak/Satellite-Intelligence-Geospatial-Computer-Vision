@@ -397,6 +397,8 @@ The baseline, the transformer, and an ensemble of the two were compared under co
 | Transformer / SegFormer-B0         | 0.8726 | 0.9320 |    0.9396 | 0.9245 | 0.9320 |     0.9803 |
 | Ensemble (U-Net + SegFormer-B0)    | 0.8903 | 0.9420 |    0.9480 | 0.9361 | 0.9420 |     0.9832 |
 
+## 3. 
+
 > Metrics are computed from pixel counts accumulated over the whole split (573 tiles each). For binary segmentation with global counts, F1 is mathematically identical to Dice; both are listed because both are commonly reported. Validation numbers use each model's saved checkpoint (U-Net: epoch 33, SegFormer-B0: epoch 41). Re-evaluating the U-Net on the validation split with the evaluation script reproduces the training-time values (Dice 0.9416, IoU 0.8896). Inference latency was not measured in this version.
 
 ### Comparison
@@ -560,6 +562,16 @@ Computed by `src/geospatial/evaluate_polygons.py`:
 * False-positive polygons on tiles that contain no buildings
 
 The ground truth is raster only, so ground-truth polygons are derived from the ground-truth masks with the same extraction (exact pixel-edge outlines, no simplification, no minimum area). Counts are per tile: a building cut by a tile edge counts separately in each tile it touches.
+
+A predicted building polygon is a true positive when matched one-to-one to a ground-truth polygon at IoU ≥ 0.5. The results below use the default extraction settings, not the validation-sweep winners.
+
+|Model	      | Precision	 | Recall	| F1	      | Mean matched IoU |
+|-----------------|------------|----------|-----------|------------------|
+|U-Net (ResNet18)	| 0.8847	 | 0.8216	| 0.8520	| 0.8695           |
+|SegFormer-B0	| 0.8731	 | 0.8059	| 0.8381	| 0.8511           |
+|Ensemble	      | 0.8967	 | 0.8262	| 0.8600	| 0.8679           |
+
+The ensemble performs best overall on these test metrics, with a modest improvement over U-Net alone. Results use a random tile split from one region, so they may overestimate performance on geographically separate areas.
 
 ### Efficiency Metrics
 
@@ -1357,11 +1369,11 @@ https://huggingface.co/datasets/blanchon/LEVIR_CDPlus
 
 🚧 **In Development**
 
-**Completed:** Phase 0 (setup), Phase 1 (dataset engineering), Phase 2 (U-Net baseline: test Dice 0.9394, IoU 0.8857), Phase 3 (SegFormer-B0 comparison: test Dice 0.9320, IoU 0.8726; ensemble of the two: test Dice 0.9420, IoU 0.8903), and Phase 4 (geospatial polygon extraction: object-level test F1 0.8600 for the ensemble at IoU ≥ 0.5 with default settings).
+**Completed**: WHU Building dataset pipeline, U-Net baseline, SegFormer-B0 comparison, probability ensemble, polygon extraction, and pixel/object-level evaluation.
 
-**Open items from earlier phases:** architecture diagram, a same-tile side-by-side model comparison, a GeoJSON example for a tile with predicted buildings, scoring the validation-tuned polygon settings on the test split, and a spatially disjoint evaluation.
+**Next milestone**: create a small local demo that displays two satellite observations for a selected area/date pair and lets users compare them in an interactive map. Keep this as an exploratory demo; do not present live-image predictions as validated results.
 
-**Next:** the prototype FastAPI service (ensemble model only) and its Docker image, followed by a final README pass. Phase 5 (multi-temporal change detection) and model optimization (ONNX, TensorRT, latency benchmarking) are not part of this version.
+**Not implemented yet**: live imagery integration, React map interface, change-detection analysis, and API deployment.
 
 > **WHU Building Dataset → Dataset Engineering → Building Segmentation Baseline → Transformer Comparison → Geospatial Extraction**
 
@@ -1406,5 +1418,152 @@ Temporal Analysis
         ↓
 Deployment
 ```
+
+🚀 **Next Development Sprint: Two-Day Live Imagery Demo**
+
+This section extends the existing project plan. It does not change or replace the completed WHU Building experiments documented above. The live imagery interface described here is planned work until implemented and tested.
+
+**Goal**
+
+Build a small local web application that lets a user select an area and two dates, view available satellite imagery for those dates, and compare the observations side by side. The initial deliverable is an imagery-comparison interface—not a claim that the WHU-trained segmentation models are already validated on Sentinel-2 data.
+Scope and guardrails
+
+Must have
+- A map interface with a selectable area of interest.
+- Two date inputs or observation selectors.
+- Retrieval of imagery metadata and imagery for both dates from a documented, accessible source.
+- Side-by-side map or image comparison.
+- Loading, no-data, and API-error states.
+- A short screen recording or GIF showing the working flow.
+
+If time permits
+- A swipe comparison control.
+- Display of acquisition date, cloud-cover metadata, and source attribution.
+- Export of the selected area and query parameters.
+
+Out of scope for this two-day sprint
+- Training a new change-detection model.
+- Claiming reliable construction/removal detection from the current WHU models.
+- Full production authentication, hosting, or cloud deployment.
+- ONNX/TensorRT optimization or formal latency benchmarking.
+
+Minimal technology stack
+- Frontend: React + TypeScript + Vite.
+- Map: MapLibre GL JS.
+- Backend: Python + FastAPI.
+- Imagery source: Copernicus Sentinel-2 via a suitable documented access method. Confirm access, credentials, usage terms, coverage, and available dates before building around a specific endpoint.
+- Data format: GeoJSON for area-of-interest geometry and JSON for API responses.
+- Environment: local development first; Docker can be added only if time remains.
+
+Keep dependencies minimal. Do not add a database unless the implementation genuinely needs persistence.
+
+**Day 1 — imagery retrieval and API**
+1. Create the frontend and backend folders and a short setup guide.
+2. Choose one small test area and a pair of dates known to have usable imagery.
+3. Verify the imagery provider manually before implementing the API.
+4. Implement a backend endpoint that accepts the area of interest and date range and returns the available observations, acquisition metadata, and imagery references or preview assets supported by the provider.
+5. Handle invalid dates, empty results, cloud-obscured observations, provider errors, and missing configuration.
+6. Save a small reproducible test request and document how to configure credentials, if required.
+
+**Day 1 acceptance check**: a local request returns a useful response for the test area, or clearly reports why no imagery is available. Do not fake live imagery with hard-coded sample responses.
+
+**Day 2 — map UI and demonstration**
+1. Build the MapLibre map and let the user select or adjust an area of interest.
+2. Add controls for the two observation dates.
+3. Connect the UI to the FastAPI endpoint.
+4. Display the two observations side by side; if practical, add a swipe comparison.
+5. Show acquisition dates, provider attribution, cloud-cover metadata when supplied, and readable empty/error states.
+6. Test a successful request and at least one no-data or failure case.
+7. Capture screenshots and a short GIF or video of the end-to-end interaction.
+8. Update the repository instructions with installation, configuration, run commands, known limitations, and the demo assets.
+
+**Day 2 acceptance check**: a user can launch the local application, select an area and two dates, and see the returned observations without editing source code.
+
+```
+Planned application layout
+satellite-intelligence/
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── services/
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── package.json
+│   └── vite.config.ts
+├── backend/
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── schemas.py
+│   │   └── imagery_service.py
+│   └── requirements.txt
+├── configs/
+├── data/
+├── results/
+│   ├── demos/
+│   ├── diagrams/
+│   └── visualizations/
+├── src/                    # existing WHU segmentation pipeline
+├── tests/
+├── .env.example
+├── requirements.txt        # existing ML environment, if retained
+└── README.md
+```
+
+Keep the existing ML pipeline separate from the new imagery application. Avoid merging frontend dependencies into the model-training environment.
+Suggested API contract
+> GET /health
+
+Returns a small status response confirming that the backend is running.
+
+> POST /api/imagery/search
+
+```
+Example request shape:
+{
+  "aoi": {
+    "type": "Polygon",
+    "coordinates": [[[ -122.43, 37.76 ], [ -122.40, 37.76 ], [ -122.40, 37.78 ], [ -122.43, 37.78 ], [ -122.43, 37.76 ]]]
+  },
+  "start_date": "2025-06-01",
+  "end_date": "2025-08-31",
+  "max_cloud_cover": 30
+}
+```
+
+The coordinates above are only an illustrative example of a valid GeoJSON polygon, not a pre-verified imagery query. The service should validate geometry and dates before contacting the provider.
+
+The response should include, where the provider supports it:
+- observation identifier;
+- acquisition timestamp;
+- cloud-cover estimate;
+- preview or tile URL/reference;
+- source/provider attribution;
+- spatial extent and relevant band/product metadata.
+
+Do not return credentials or provider secrets to the browser. If the provider requires signed URLs or authentication, generate/use them on the backend according to the provider's terms.
+Important scientific limitation
+The completed U-Net, SegFormer-B0, and ensemble metrics in this README were measured on the WHU Building Dataset. They do not establish performance on Sentinel-2. Sentinel-2 has different spatial resolution, spectral bands, atmospheric effects, and acquisition characteristics from the WHU aerial imagery. Applying the existing model directly to Sentinel-2 may produce invalid or misleading building masks. Any such integration must be labeled experimental until it has been evaluated on representative, appropriately annotated imagery.
+
+Similarly, displaying two dates is not itself change detection. A defensible change-detection result requires co-registration, compatible spatial resolution and preprocessing, cloud/shadow handling, and evaluation against appropriate ground truth. Treat visual differences as exploratory unless those checks are implemented.
+Demo asset placeholders
+Add the assets after the application actually works; do not leave placeholders that imply an unimplemented feature is available.
+
+<!-- DEMO GIF PLACEHOLDER
+Add results/demos/live_imagery_comparison.gif after recording the working application.
+Show: select area -> select two dates -> retrieve observations -> compare views.
+-->
+
+<!-- SCREENSHOT PLACEHOLDER
+Add results/visualizations/live_imagery_ui.png after the UI is implemented.
+-->
+Sprint completion checklist
+- [ ] Imagery source and access method verified.
+- [ ] Backend validates requests and returns observation metadata.
+- [ ] Frontend map and area-of-interest selection work.
+- [ ] Two-date comparison renders real returned observations.
+- [ ] Loading, no-data, and error states tested.
+- [ ] Provider attribution and configuration instructions documented.
+- [ ] Demo GIF/screenshots recorded from the working app.
+- [ ] README status updated to distinguish implemented features from planned work.
 
 > **From pixels to geospatial intelligence.**
