@@ -98,9 +98,6 @@ async def upload_post(request: Request, file: UploadFile = File(...)):
     # Convert back to a PIL Image
     combined = Image.fromarray(input_np)
 
-    # Display non-blockingly on your screen
-    combined.show() 
-
     # Save to BytesIO and encode to base64 for the API response
     combined_buffer = io.BytesIO()
     combined.save(combined_buffer, format="PNG")
@@ -109,5 +106,5 @@ async def upload_post(request: Request, file: UploadFile = File(...)):
     return {
         "status": 200,
         "message": "The Image has been uploaded successfully",
-        "image": f"data:image/png;base64,{encoded_string}"
+        "image": f"data:image/png;base64,{encoded_string}",
     }
