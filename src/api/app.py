@@ -6,12 +6,16 @@ import torch
 import numpy as np
 from PIL import Image
 from fastapi import FastAPI, File, UploadFile,  HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from ..inference.predictor import SegmentationPredictor
 from ..code.preprocessing import preprocess_transforms
 
 load_dotenv()
 app: FastAPI = FastAPI()
+
+# adding middleware for react application requests
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"], allow_methods=["*"], allow_headers=["*"])
 
 # Load the ensemble model
 predictor: SegmentationPredictor = SegmentationPredictor.from_checkpoints(["unet", "segformer"])
@@ -31,7 +35,7 @@ def get_posts_home() -> dict[str, str | int]:
     }
 
 @app.post("/uploads")
-async def upload_post(request: Request, file: UploadFile = File(...)):
+async def upload_post(request: Request, file: UploadFile = File(...)) -> dict[str, int | str]:
     # validating the user input
 
     if file.content_type not in ("image/jpeg", "image/png", "image/jpg"):
