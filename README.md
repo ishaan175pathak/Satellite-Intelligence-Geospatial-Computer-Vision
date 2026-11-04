@@ -1489,4 +1489,6 @@ Temporal Analysis
 Deployment
 ```
 
+*working demo for the project*: ![working demo](results/visualizations/Application%20demo.gif)
+
 > **From pixels to geospatial intelligence.**
