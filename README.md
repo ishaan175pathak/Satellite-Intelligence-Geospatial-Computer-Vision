@@ -3,6 +3,21 @@
 > **An end-to-end Earth Observation computer vision prototype for satellite-image segmentation, building-footprint extraction, and geospatial analysis.**
 
 
+## ⚡ At a Glance
+
+| | |
+|---|---|
+| **Task** | Building-footprint segmentation on high-resolution aerial imagery |
+| **Data** | WHU Building Dataset (Christchurch, NZ), 4,586 / 573 / 573 train / val / test tiles |
+| **Models** | U-Net (ResNet18), SegFormer-B0, and a probability-averaging ensemble of the two |
+| **Best result (test)** | Ensemble: **Dice 0.9420**, IoU 0.8903 at pixel level; **F1 0.8600** at object level (IoU ≥ 0.5 matching) |
+| **Beyond the model** | Mask-to-polygon extraction with GeoJSON export, object-level evaluation, FastAPI inference service, Dockerfile, React upload app |
+| **Stack** | PyTorch, segmentation_models_pytorch, Hugging Face Transformers, Shapely, FastAPI, Docker, React + Vite |
+
+Jump to: [Results](#-final-results) · [Run the application](#-deployment) · [Frontend branch](https://github.com/ishaan175pathak/Satellite-Intelligence-Geospatial-Computer-Vision/tree/frontend)
+
+---
+
 ## 📌 Overview
 
 Satellite imagery provides a scalable way to monitor buildings, infrastructure, environmental changes, and urban development.
@@ -16,7 +31,7 @@ This project develops an **end-to-end computer vision prototype for Earth Observ
 
 The project is designed to bridge **deep learning research and practical ML engineering**.
 
-> **Scope of this version.** This version covers data engineering, a U-Net baseline, a SegFormer-B0 comparison, an ensemble of the two, polygon extraction with object-level evaluation, and a prototype FastAPI service (ensemble model only) packaged as a Docker image. The API and the Docker image are the remaining work and are not built yet. Multi-temporal change detection (Phase 5) and model optimization (ONNX, TensorRT, latency benchmarking) are **not part of this version**; they are kept below as future work.
+> **Scope of this version.** This version covers data engineering, a U-Net baseline, a SegFormer-B0 comparison, an ensemble of the two, polygon extraction with object-level evaluation, a prototype **FastAPI** inference service (ensemble model only) with a Dockerfile, and a **React** web app for uploading an image and viewing the predicted building overlay. Multi-temporal change detection (Phase 5) and model optimization (ONNX, TensorRT, latency benchmarking) are **not part of this version**; they are kept below as future work.
 
 ### Core Pipeline
 
@@ -81,25 +96,15 @@ The primary objectives are to:
 
 # 🗺️ Project Demonstration
 
-> **This section will be populated as the project develops.**
+### Web App
 
-### End-to-End Demo
+Upload an aerial or satellite image in the React app (branch [`frontend`](https://github.com/ishaan175pathak/Satellite-Intelligence-Geospatial-Computer-Vision/tree/frontend)). The FastAPI backend runs the U-Net + SegFormer-B0 ensemble and returns the image with the predicted building regions overlaid in red, shown next to the original. See [Deployment](#-deployment) to run it locally.
 
-<!-- IMAGE/GIF PLACEHOLDER
-Add a short GIF or video showing:
+### Pipeline Preview
 
-Satellite Image
-      ↓
-Model Inference
-      ↓
-Building Segmentation
-      ↓
-Polygon Extraction
-      ↓
-Final Geospatial Visualization
--->
+![WHU Building Segmentation Pipeline](results/demos/whu_building_segmentation_pipeline_demo.gif)
 
-**Coming soon:** A complete visual demonstration of the inference pipeline.
+*An animation of the workflow, from image upload and model inference to building-mask visualization. It is an illustration, not a screen recording of the running app.*
 
 ---
 
@@ -575,7 +580,7 @@ The ensemble performs best overall on these test metrics, with a modest improvem
 
 ### Efficiency Metrics
 
-Not evaluated in this version: no latency, throughput, memory, or model-size benchmark was run. The prototype API is planned to report the inference time of each request, which would give only a rough indication on whatever hardware it runs on. A proper efficiency study would measure:
+Not evaluated in this version: no latency, throughput, memory, or model-size benchmark was run. The prototype API does not report per-request timing either. A proper efficiency study would measure:
 
 * Inference latency
 * Images per second
@@ -852,9 +857,6 @@ Replace the ASCII architecture above with a professionally designed architecture
 ```text
 satellite-intelligence/
 │
-├── configs/
-│   └── config.yaml
-│
 ├── data/
 │   ├── raw/
 │   │   └── whu_building/
@@ -893,6 +895,9 @@ satellite-intelligence/
 │   └── polygon_sweep_{unet,segformer,ensemble}_val.csv
 │
 ├── src/
+│   ├── api/
+│   │   └── app.py
+│   │
 │   ├── code/
 │   │   ├── __init__.py
 │   │   ├── alignment_check.py
@@ -917,23 +922,24 @@ satellite-intelligence/
 │   ├── inference/
 │   │   └── predictor.py
 │   │
-│   └── geospatial/
-│       ├── polygons.py
-│       ├── evaluate_polygons.py
-│       ├── visualize_polygons.py
-│       └── export.py
+│   ├── geospatial/
+│   │   ├── polygons.py
+│   │   ├── evaluate_polygons.py
+│   │   ├── visualize_polygons.py
+│   │   └── export.py
+│   │
+│   └── train.py
 │
 ├── tests/
 │   ├── conftest.py
 │   └── test_geospatial.py
 │
-├── train.py
-├── unet_best_model.pth
+├── unet_best_model.pth                 # not tracked in git (see Deployment)
 ├── unet_training_log.csv
-├── segformer_mit-b0_best_model.pth
+├── segformer_mit-b0_best_model.pth     # not tracked in git (see Deployment)
 ├── segformer_mit-b0_training_log.csv
 ├── requirements.txt
-├── Dockerfile
+├── dockerfile
 └── README.md
 ```
 
@@ -941,32 +947,101 @@ satellite-intelligence/
 
 # 🚀 Deployment
 
-A prototype inference service is the remaining work for this version. **It is not built yet.** It will serve the **ensemble model only** (the average of the U-Net and SegFormer-B0 probabilities, the best configuration in the evaluation above) and will be packaged as a Docker image. Because it is a prototype rather than a production service, it runs both networks on every image, which is roughly twice the cost of a single model, and it has no latency target.
+The ensemble is served by a **FastAPI** backend (this branch, `main`) and used through a **React** single-page app (branch [`frontend`](https://github.com/ishaan175pathak/Satellite-Intelligence-Geospatial-Computer-Vision/tree/frontend)). The prototype serves the **ensemble only** (the average of the U-Net and SegFormer-B0 probabilities, the best configuration in the evaluation above). Each request therefore runs both networks, roughly twice the cost of a single model, and there is no latency target.
 
 ```text
-Satellite Image
-       │
-       ▼
-     FastAPI
-       │
-       ▼
- Model Inference (ensemble)
-       │
-       ▼
-Segmentation Mask
-       │
-       ▼
-Polygon Extraction
-       │
-       ▼
-Geospatial Response
+ React app (upload form)
+          │   POST /uploads  (multipart image)
+          ▼
+        FastAPI ── validate JPEG/PNG ── preprocess
+          │
+          ▼
+ Ensemble inference (U-Net + SegFormer-B0)
+          │
+          ▼
+ Building-probability map → red overlay on the original image
+          │   JSON containing a base64-encoded PNG
+          ▼
+ React app (original image next to overlay)
 ```
 
-### API Demo (preview)
+### API
 
-The animation below is a **preview of the intended workflow**, from image upload and model inference to building-mask visualization. It is not a recording of a running service, and it will be replaced with a recording once the API exists.
+The service listens on port 8000. Interactive documentation is available at `/docs` while it runs.
 
-![WHU Building Segmentation Pipeline](results/demos/whu_building_segmentation_pipeline_demo.gif)
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/` | Health check. Returns `{"status": 200, "message": "The server is running properly"}`. |
+| `GET` | `/uploads` | Readiness check for the upload endpoint. |
+| `POST` | `/uploads` | Accepts a multipart form with one image in the field `file` (JPEG or PNG) and returns the segmentation overlay. |
+
+**`POST /uploads` response**
+
+```json
+{
+  "status": 200,
+  "message": "The Image has been uploaded successfully",
+  "image": "data:image/png;base64,..."
+}
+```
+
+* `image` is a PNG data URL, the same size as the uploaded image. The ensemble's building-probability map is blended over the original in red at 40% opacity.
+* Files that are not JPEG or PNG are rejected with `400`.
+
+```bash
+curl -X POST -F "file=@tile.png" http://localhost:8000/uploads
+```
+
+### Run Locally
+
+The backend and the frontend live on different branches, so use two checkouts:
+
+```bash
+git clone https://github.com/ishaan175pathak/Satellite-Intelligence-Geospatial-Computer-Vision.git
+cd Satellite-Intelligence-Geospatial-Computer-Vision
+git worktree add ../satellite-frontend frontend
+```
+
+**Model weights.** The checkpoints `unet_best_model.pth` and `segformer_mit-b0_best_model.pth` are not stored in git. Produce them with the training script (`src/train.py`, settings in *Reproducibility*) and place them in the repository root, next to `requirements.txt`. The service loads both at startup.
+
+**1. Backend** (terminal 1, repository root)
+
+```bash
+python -m venv venv
+venv\Scripts\activate            # Linux/macOS: source venv/bin/activate
+pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu128
+uvicorn src.api.app:app --reload
+```
+
+The API is now at `http://localhost:8000`.
+
+**2. Frontend** (terminal 2)
+
+```bash
+cd ../satellite-frontend
+npm install
+npm run dev
+```
+
+Open the address printed by Vite (by default `http://localhost:5173`) and upload an image. The frontend calls `http://localhost:8000/uploads`, so the backend must be running first and must allow cross-origin requests from the frontend's origin (CORS). See the [`frontend` README](https://github.com/ishaan175pathak/Satellite-Intelligence-Geospatial-Computer-Vision/tree/frontend) for details.
+
+### Run with Docker
+
+The repository includes a Dockerfile for the backend. It installs the dependencies, copies `src/` and both checkpoints (they must be present in the repository root at build time), and starts Uvicorn on port 8000.
+
+```bash
+docker build -f dockerfile -t satellite-segmentation-api .
+docker run --rm -p 8000:8000 satellite-segmentation-api
+```
+
+The image installs PyTorch built for CUDA 12.8. Add `--gpus all` to `docker run` to use an NVIDIA GPU (requires the NVIDIA Container Toolkit). Day-to-day development currently runs the backend directly with Uvicorn, as above.
+
+### Scope and Limitations
+
+* Ensemble only: there is no model selector, and every request runs both networks.
+* The service returns an image overlay only. Polygon extraction and GeoJSON export (see *Geospatial Extraction*) are available as offline modules and are not exposed through the API.
+* The models were trained on one region (Christchurch, NZ). Images from other regions, sensors, or ground resolutions may give noticeably worse results, and no such evaluation was done.
+* Latency, throughput, and memory were not benchmarked.
 
 ---
 
@@ -1119,7 +1194,7 @@ What is the trade-off between segmentation accuracy and inference efficiency? *(
 ### Engineering
 
 * Git
-* Docker (planned)
+* Docker
 * pytest
 * YAML configuration
 * Structured logging
@@ -1127,7 +1202,8 @@ What is the trade-off between segmentation accuracy and inference efficiency? *(
 
 ### Deployment
 
-* FastAPI (planned, prototype)
+* FastAPI + Uvicorn (prototype inference service)
+* React + Vite + Tailwind CSS (web app, `frontend` branch)
 * ONNX (not used)
 * ONNX Runtime (not used)
 * TensorRT (not used)
@@ -1196,7 +1272,7 @@ What is the trade-off between segmentation accuracy and inference efficiency? *(
 
 **Documentation milestone:**
 
-* [ ] Architecture diagram
+* [x] Architecture diagram
 * [x] CNN vs Transformer table
 * [x] Qualitative comparison
 * [x] Error analysis
@@ -1244,7 +1320,8 @@ What is the trade-off between segmentation accuracy and inference efficiency? *(
 
 * [x] Build inference interface
 * [x] Develop FastAPI service (ensemble model only)
-* [x] Containerize with Docker
+* [x] Containerize with Docker (Dockerfile for the backend)
+* [x] Build a React web app for upload and visualization (`frontend` branch)
 
 **Not pursued in this version (future work):**
 
@@ -1255,10 +1332,7 @@ What is the trade-off between segmentation accuracy and inference efficiency? *(
 
 **Documentation milestone:**
 
-* [ ] API demo GIF (a preview exists; replace it with a recording of the running service)
-* [ ] Deployment architecture
-* [ ] End-to-end demo
-
+* [x] Deployment architecture
 ---
 
 # 📸 Documentation Strategy
@@ -1367,17 +1441,13 @@ https://huggingface.co/datasets/blanchon/LEVIR_CDPlus
 
 # 📌 Project Status
 
-🚧 **In Development**
+✅ **Complete (prototype)**
 
-**Completed**: WHU Building dataset pipeline, U-Net baseline, SegFormer-B0 comparison, probability ensemble, polygon extraction, and pixel/object-level evaluation.
+**Delivered**: WHU Building dataset pipeline, U-Net baseline, SegFormer-B0 comparison, probability ensemble, polygon extraction with pixel- and object-level evaluation, a FastAPI inference service (ensemble only), a Dockerfile for the backend, and a React upload app (`frontend` branch).
 
-**Next milestone**: create a small local demo that displays two satellite observations for a selected area/date pair and lets users compare them in an interactive map. Keep this as an exploratory demo; do not present live-image predictions as validated results.
+**Not part of this version**: multi-temporal change detection, live-imagery integration, model optimization (ONNX, TensorRT) and latency benchmarking, and polygon/GeoJSON output through the API.
 
-**Not implemented yet**: live imagery integration, React map interface, change-detection analysis, and API deployment.
-
-> **WHU Building Dataset → Dataset Engineering → Building Segmentation Baseline → Transformer Comparison → Geospatial Extraction**
-
-Results and visualizations will be added progressively as each experiment is completed.
+> **WHU Building Dataset → Dataset Engineering → Building Segmentation Baseline → Transformer Comparison → Geospatial Extraction → API and Web App**
 
 ---
 
@@ -1418,152 +1488,5 @@ Temporal Analysis
         ↓
 Deployment
 ```
-
-🚀 **Next Development Sprint: Two-Day Live Imagery Demo**
-
-This section extends the existing project plan. It does not change or replace the completed WHU Building experiments documented above. The live imagery interface described here is planned work until implemented and tested.
-
-**Goal**
-
-Build a small local web application that lets a user select an area and two dates, view available satellite imagery for those dates, and compare the observations side by side. The initial deliverable is an imagery-comparison interface—not a claim that the WHU-trained segmentation models are already validated on Sentinel-2 data.
-Scope and guardrails
-
-Must have
-- A map interface with a selectable area of interest.
-- Two date inputs or observation selectors.
-- Retrieval of imagery metadata and imagery for both dates from a documented, accessible source.
-- Side-by-side map or image comparison.
-- Loading, no-data, and API-error states.
-- A short screen recording or GIF showing the working flow.
-
-If time permits
-- A swipe comparison control.
-- Display of acquisition date, cloud-cover metadata, and source attribution.
-- Export of the selected area and query parameters.
-
-Out of scope for this two-day sprint
-- Training a new change-detection model.
-- Claiming reliable construction/removal detection from the current WHU models.
-- Full production authentication, hosting, or cloud deployment.
-- ONNX/TensorRT optimization or formal latency benchmarking.
-
-Minimal technology stack
-- Frontend: React + TypeScript + Vite.
-- Map: MapLibre GL JS.
-- Backend: Python + FastAPI.
-- Imagery source: Copernicus Sentinel-2 via a suitable documented access method. Confirm access, credentials, usage terms, coverage, and available dates before building around a specific endpoint.
-- Data format: GeoJSON for area-of-interest geometry and JSON for API responses.
-- Environment: local development first; Docker can be added only if time remains.
-
-Keep dependencies minimal. Do not add a database unless the implementation genuinely needs persistence.
-
-**Day 1 — imagery retrieval and API**
-1. Create the frontend and backend folders and a short setup guide.
-2. Choose one small test area and a pair of dates known to have usable imagery.
-3. Verify the imagery provider manually before implementing the API.
-4. Implement a backend endpoint that accepts the area of interest and date range and returns the available observations, acquisition metadata, and imagery references or preview assets supported by the provider.
-5. Handle invalid dates, empty results, cloud-obscured observations, provider errors, and missing configuration.
-6. Save a small reproducible test request and document how to configure credentials, if required.
-
-**Day 1 acceptance check**: a local request returns a useful response for the test area, or clearly reports why no imagery is available. Do not fake live imagery with hard-coded sample responses.
-
-**Day 2 — map UI and demonstration**
-1. Build the MapLibre map and let the user select or adjust an area of interest.
-2. Add controls for the two observation dates.
-3. Connect the UI to the FastAPI endpoint.
-4. Display the two observations side by side; if practical, add a swipe comparison.
-5. Show acquisition dates, provider attribution, cloud-cover metadata when supplied, and readable empty/error states.
-6. Test a successful request and at least one no-data or failure case.
-7. Capture screenshots and a short GIF or video of the end-to-end interaction.
-8. Update the repository instructions with installation, configuration, run commands, known limitations, and the demo assets.
-
-**Day 2 acceptance check**: a user can launch the local application, select an area and two dates, and see the returned observations without editing source code.
-
-```
-Planned application layout
-satellite-intelligence/
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── services/
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   ├── package.json
-│   └── vite.config.ts
-├── backend/
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── schemas.py
-│   │   └── imagery_service.py
-│   └── requirements.txt
-├── configs/
-├── data/
-├── results/
-│   ├── demos/
-│   ├── diagrams/
-│   └── visualizations/
-├── src/                    # existing WHU segmentation pipeline
-├── tests/
-├── .env.example
-├── requirements.txt        # existing ML environment, if retained
-└── README.md
-```
-
-Keep the existing ML pipeline separate from the new imagery application. Avoid merging frontend dependencies into the model-training environment.
-Suggested API contract
-> GET /health
-
-Returns a small status response confirming that the backend is running.
-
-> POST /api/imagery/search
-
-```
-Example request shape:
-{
-  "aoi": {
-    "type": "Polygon",
-    "coordinates": [[[ -122.43, 37.76 ], [ -122.40, 37.76 ], [ -122.40, 37.78 ], [ -122.43, 37.78 ], [ -122.43, 37.76 ]]]
-  },
-  "start_date": "2025-06-01",
-  "end_date": "2025-08-31",
-  "max_cloud_cover": 30
-}
-```
-
-The coordinates above are only an illustrative example of a valid GeoJSON polygon, not a pre-verified imagery query. The service should validate geometry and dates before contacting the provider.
-
-The response should include, where the provider supports it:
-- observation identifier;
-- acquisition timestamp;
-- cloud-cover estimate;
-- preview or tile URL/reference;
-- source/provider attribution;
-- spatial extent and relevant band/product metadata.
-
-Do not return credentials or provider secrets to the browser. If the provider requires signed URLs or authentication, generate/use them on the backend according to the provider's terms.
-Important scientific limitation
-The completed U-Net, SegFormer-B0, and ensemble metrics in this README were measured on the WHU Building Dataset. They do not establish performance on Sentinel-2. Sentinel-2 has different spatial resolution, spectral bands, atmospheric effects, and acquisition characteristics from the WHU aerial imagery. Applying the existing model directly to Sentinel-2 may produce invalid or misleading building masks. Any such integration must be labeled experimental until it has been evaluated on representative, appropriately annotated imagery.
-
-Similarly, displaying two dates is not itself change detection. A defensible change-detection result requires co-registration, compatible spatial resolution and preprocessing, cloud/shadow handling, and evaluation against appropriate ground truth. Treat visual differences as exploratory unless those checks are implemented.
-Demo asset placeholders
-Add the assets after the application actually works; do not leave placeholders that imply an unimplemented feature is available.
-
-<!-- DEMO GIF PLACEHOLDER
-Add results/demos/live_imagery_comparison.gif after recording the working application.
-Show: select area -> select two dates -> retrieve observations -> compare views.
--->
-
-<!-- SCREENSHOT PLACEHOLDER
-Add results/visualizations/live_imagery_ui.png after the UI is implemented.
--->
-Sprint completion checklist
-- [ ] Imagery source and access method verified.
-- [ ] Backend validates requests and returns observation metadata.
-- [ ] Frontend map and area-of-interest selection work.
-- [ ] Two-date comparison renders real returned observations.
-- [ ] Loading, no-data, and error states tested.
-- [ ] Provider attribution and configuration instructions documented.
-- [ ] Demo GIF/screenshots recorded from the working app.
-- [ ] README status updated to distinguish implemented features from planned work.
 
 > **From pixels to geospatial intelligence.**
